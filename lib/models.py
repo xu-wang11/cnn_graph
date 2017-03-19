@@ -7,8 +7,8 @@ import numpy as np
 import os, time, collections, shutil
 
 
-#NFEATURES = 28**2
-#NCLASSES = 10
+NFEATURES = 28**2
+NCLASSES = 10
 
 
 # Common methods for all models
@@ -30,7 +30,7 @@ class base_model(object):
             end = begin + self.batch_size
             end = min([end, size])
             
-            batch_data = np.zeros((self.batch_size, data.shape[1]))
+            batch_data = np.zeros((self.batch_size, data.shape[1], data.shape[2]))
             tmp_data = data[begin:end,:]
             if type(tmp_data) is not np.ndarray:
                 tmp_data = tmp_data.toarray()  # convert sparse matrices
@@ -146,14 +146,14 @@ class base_model(object):
 
     # Methods to construct the computational graph.
     
-    def build_graph(self, M_0):
+    def build_graph(self, M_0, C_0=3):
         """Build the computational graph of the model."""
         self.graph = tf.Graph()
         with self.graph.as_default():
 
             # Inputs.
             with tf.name_scope('inputs'):
-                self.ph_data = tf.placeholder(tf.float32, (self.batch_size, M_0), 'data')
+                self.ph_data = tf.placeholder(tf.float32, (self.batch_size, M_0, C_0), 'data')
                 self.ph_labels = tf.placeholder(tf.int32, (self.batch_size), 'labels')
                 self.ph_dropout = tf.placeholder(tf.float32, (), 'dropout')
 
@@ -950,7 +950,7 @@ class cgcnn(base_model):
 
     def _inference(self, x, dropout):
         # Graph convolutional layers.
-        x = tf.expand_dims(x, 2)  # N x M x F=1
+        # x = tf.expand_dims(x, 2)  # N x M x F=1
         for i in range(len(self.p)):
             with tf.variable_scope('conv{}'.format(i+1)):
                 with tf.name_scope('filter'):
