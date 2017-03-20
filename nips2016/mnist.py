@@ -57,12 +57,13 @@ def grid_graph(m, corners=False):
     return A
 
 t_start = time.process_time()
-A = grid_graph(28, corners=False)
+A = grid_graph(32, corners=False)
 A = graph.replace_random_edges(A, 0)
 graphs, perm = coarsening.coarsen(A, levels=FLAGS.coarsening_levels, self_connections=False)
 L = [graph.laplacian(A, normalized=True) for A in graphs]
 print('Execution time: {:.2f}s'.format(time.process_time() - t_start))
 graph.plot_spectrum(L)
+
 del A
 
 
