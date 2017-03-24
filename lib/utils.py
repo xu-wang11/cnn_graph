@@ -287,13 +287,14 @@ class model_perf(object):
         s.params[name] = params
         s.fit_accuracies[name], s.fit_losses[name], s.fit_time[name] = \
                 model.fit(train_data, train_labels, val_data, val_labels)
-        string, s.train_accuracy[name], s.train_f1[name], s.train_loss[name] = \
+        string, s.train_accuracy[name], s.train_f1[name], s.train_loss[name], train_predictions = \
                 model.evaluate(train_data, train_labels)
         print('train {}'.format(string))
-        string, s.test_accuracy[name], s.test_f1[name], s.test_loss[name] = \
+        string, s.test_accuracy[name], s.test_f1[name], s.test_loss[name], test_prediction = \
                 model.evaluate(test_data, test_labels)
         print('test  {}'.format(string))
         s.names.add(name)
+        return train_predictions, test_prediction
 
     def show(s, fontsize=None):
         if fontsize:

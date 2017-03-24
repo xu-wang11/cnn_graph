@@ -18,20 +18,23 @@ class base_model(object):
     
     def __init__(self):
         self.regularizers = []
+        self.convFuncs = []
+        self.activeFuncs = []
+
     
     # High-level interface which runs the constructed computational graph.
     
     def predict(self, data, labels=None, sess=None):
         loss = 0
         size = data.shape[0]
-        predictions = np.empty(size)
+        predictions = np.empty((size, data.shape[1]))
         sess = self._get_session(sess)
         for begin in range(0, size, self.batch_size):
             end = begin + self.batch_size
             end = min([end, size])
             
             batch_data = np.zeros((self.batch_size, data.shape[1], data.shape[2]))
-            tmp_data = data[begin:end,:]
+            tmp_data = data[begin:end, :]
             if type(tmp_data) is not np.ndarray:
                 tmp_data = tmp_data.toarray()  # convert sparse matrices
             batch_data[:end-begin] = tmp_data
@@ -39,10 +42,10 @@ class base_model(object):
             
             # Compute loss if labels are given.
             if labels is not None:
-                batch_labels = np.zeros(self.batch_size)
+                batch_labels = np.zeros((self.batch_size, data.shape[1]))
                 batch_labels[:end-begin] = labels[begin:end]
                 feed_dict[self.ph_labels] = batch_labels
-                batch_pred, batch_loss = sess.run([self.op_prediction, self.op_loss], feed_dict)
+                batch_pred, batch_loss, test1, test2 = sess.run([self.op_prediction, self.op_loss, self.convFuncs[-1], self.activeFuncs[-1]], feed_dict)
                 loss += batch_loss
             else:
                 batch_pred = sess.run(self.op_prediction, feed_dict)
@@ -71,14 +74,15 @@ class base_model(object):
         t_process, t_wall = time.process_time(), time.time()
         predictions, loss = self.predict(data, labels, sess)
         #print(predictions)
-        ncorrects = sum(predictions == labels)
-        accuracy = 100 * sklearn.metrics.accuracy_score(labels, predictions)
-        f1 = 100 * sklearn.metrics.f1_score(labels, predictions, average='weighted')
-        string = 'accuracy: {:.2f} ({:d} / {:d}), f1 (weighted): {:.2f}, loss: {:.2e}'.format(
-                accuracy, ncorrects, len(labels), f1, loss)
+        # ncorrects = sum(predictions == labels)
+        # accuracy = 100 * sklearn.metrics.accuracy_score(labels, predictions)
+        mse = sklearn.metrics.mean_squared_error(labels, predictions)
+        # f1 = 100 * sklearn.metrics.f1_score(labels, predictions, average='weighted')
+        string = 'mse: {:.5f} ( {:d}), f1 (weighted), loss: {:.2e}'.format(
+                mse, len(labels), loss)
         if sess is None:
             string += '\ntime: {:.0f}s (wall {:.0f}s)'.format(time.process_time()-t_process, time.time()-t_wall)
-        return string, accuracy, f1, loss
+        return string, mse, 0, loss, predictions
 
     def fit(self, train_data, train_labels, val_data, val_labels):
         t_process, t_wall = time.process_time(), time.time()
@@ -102,18 +106,18 @@ class base_model(object):
                 indices.extend(np.random.permutation(train_data.shape[0]))
             idx = [indices.popleft() for i in range(self.batch_size)]
 
-            batch_data, batch_labels = train_data[idx,:], train_labels[idx]
+            batch_data, batch_labels = train_data[idx, :], train_labels[idx]
             if type(batch_data) is not np.ndarray:
                 batch_data = batch_data.toarray()  # convert sparse matrices
             feed_dict = {self.ph_data: batch_data, self.ph_labels: batch_labels, self.ph_dropout: self.dropout}
-            learning_rate, loss_average = sess.run([self.op_train, self.op_loss_average], feed_dict)
+            learning_rate,loss, loss_average = sess.run([self.op_train,self.op_loss, self.op_loss_average], feed_dict)
 
             # Periodical evaluation of the model.
             if step % self.eval_frequency == 0 or step == num_steps:
                 epoch = step * self.batch_size / train_data.shape[0]
                 print('step {} / {} (epoch {:.2f} / {}):'.format(step, num_steps, epoch, self.num_epochs))
-                print('  learning_rate = {:.2e}, loss_average = {:.2e}'.format(learning_rate, loss_average))
-                string, accuracy, f1, loss = self.evaluate(val_data, val_labels, sess)
+                # print('  learning_rate = {:.2e}, loss_average = {:.2e}'.format(learning_rate, loss_average))
+                string, accuracy, f1, loss, no_use = self.evaluate(val_data, val_labels, sess)
                 accuracies.append(accuracy)
                 losses.append(loss)
                 print('  validation {}'.format(string))
@@ -146,7 +150,7 @@ class base_model(object):
 
     # Methods to construct the computational graph.
     
-    def build_graph(self, M_0, C_0=3):
+    def build_graph(self, M_0, C_0=10):
         """Build the computational graph of the model."""
         self.graph = tf.Graph()
         with self.graph.as_default():
@@ -154,7 +158,7 @@ class base_model(object):
             # Inputs.
             with tf.name_scope('inputs'):
                 self.ph_data = tf.placeholder(tf.float32, (self.batch_size, M_0, C_0), 'data')
-                self.ph_labels = tf.placeholder(tf.int32, (self.batch_size), 'labels')
+                self.ph_labels = tf.placeholder(tf.float32, (self.batch_size, M_0), 'labels')
                 self.ph_dropout = tf.placeholder(tf.float32, (), 'dropout')
 
             # Model.
@@ -170,9 +174,12 @@ class base_model(object):
             # Summaries for TensorBoard and Save for model parameters.
             self.op_summary = tf.summary.merge_all()
             self.op_saver = tf.train.Saver(max_to_keep=5)
+
+
         
         self.graph.finalize()
-    
+        # writer = tf.summary.FileWriter(self._get_path("checkpoints") + "/graph_def", tf.Session().graph)
+        # writer.close()
     def inference(self, data, dropout):
         """
         It builds the model, i.e. the computational graph, as far as
@@ -199,32 +206,36 @@ class base_model(object):
     def prediction(self, logits):
         """Return the predicted classes."""
         with tf.name_scope('prediction'):
-            prediction = tf.argmax(logits, axis=1)
+            prediction = tf.nn.tanh(logits) # tf.argmax(logits, axis=1)
             return prediction
 
     def loss(self, logits, labels, regularization):
         """Adds to the inference model the layers required to generate loss."""
         with tf.name_scope('loss'):
-            with tf.name_scope('cross_entropy'):
-                labels = tf.to_int64(labels)
-                cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
-                cross_entropy = tf.reduce_mean(cross_entropy)
-            with tf.name_scope('regularization'):
-                regularization *= tf.add_n(self.regularizers)
-            loss = cross_entropy + regularization
-            
+            # with tf.name_scope('cross_entropy'):
+            #     labels = tf.to_int64(labels)
+            #     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
+            #     cross_entropy = tf.reduce_mean(cross_entropy)
+            with tf.name_scope('mse'):
+                cross_entropy = tf.nn.l2_loss(labels - logits)
+            # with tf.name_scope('regularization'):
+            #    regularization *= tf.add_n(self.regularizers)
+            # loss = cross_entropy + regularization
+            loss = cross_entropy
             # Summaries for TensorBoard.
             tf.summary.scalar('loss/cross_entropy', cross_entropy)
             tf.summary.scalar('loss/regularization', regularization)
             tf.summary.scalar('loss/total', loss)
             with tf.name_scope('averages'):
                 averages = tf.train.ExponentialMovingAverage(0.9)
-                op_averages = averages.apply([cross_entropy, regularization, loss])
+                # op_averages = loss
+                op_averages = averages.apply([cross_entropy])
                 tf.summary.scalar('loss/avg/cross_entropy', averages.average(cross_entropy))
-                tf.summary.scalar('loss/avg/regularization', averages.average(regularization))
+                # tf.summary.scalar('loss/avg/regularization', averages.average(regularization))
                 tf.summary.scalar('loss/avg/total', averages.average(loss))
                 with tf.control_dependencies([op_averages]):
                     loss_average = tf.identity(averages.average(loss), name='control')
+
             return loss, loss_average
     
     def training(self, loss, learning_rate, decay_steps, decay_rate=0.95, momentum=0.9):
@@ -237,11 +248,12 @@ class base_model(object):
                         learning_rate, global_step, decay_steps, decay_rate, staircase=True)
             tf.summary.scalar('learning_rate', learning_rate)
             # Optimizer.
-            if momentum == 0:
-                optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-                #optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
-            else:
-                optimizer = tf.train.MomentumOptimizer(learning_rate, momentum)
+            # if momentum == 0:
+            #     optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+            #     #optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
+            # else:
+            #     optimizer = tf.train.MomentumOptimizer(learning_rate, momentum)
+            optimizer = tf.train.GradientDescentOptimizer(learning_rate)
             grads = optimizer.compute_gradients(loss)
             op_gradients = optimizer.apply_gradients(grads, global_step=global_step)
             # Histograms.
@@ -251,6 +263,7 @@ class base_model(object):
                 else:
                     tf.summary.histogram(var.op.name + '/gradients', grad)
             # The op return the learning rate.
+
             with tf.control_dependencies([op_gradients]):
                 op_train = tf.identity(learning_rate, name='control')
             return op_train
@@ -830,6 +843,7 @@ class cgcnn(base_model):
         U = tf.constant(U.T, dtype=tf.float32)
         # Weights
         W = self._weight_variable([M, Fout, Fin], regularization=False)
+        self.convFuncs.append(W)
         return self.filter_in_fourier(x, L, Fout, K, U, W)
 
     def spline(self, x, L, Fout, K):
@@ -951,24 +965,63 @@ class cgcnn(base_model):
     def _inference(self, x, dropout):
         # Graph convolutional layers.
         # x = tf.expand_dims(x, 2)  # N x M x F=1
+        self.p = [1,1]
+        x1 = x
         for i in range(len(self.p)):
             with tf.variable_scope('conv{}'.format(i+1)):
                 with tf.name_scope('filter'):
-                    x = self.filter(x, self.L[i], self.F[i], self.K[i])
+                    self.convFuncs.append(x)
+                    x = self.filter(x, self.L[0], 10, self.K[0])
+                    self.convFuncs.append(x)
                 with tf.name_scope('bias_relu'):
-                    x = self.brelu(x)
-                with tf.name_scope('pooling'):
-                    x = self.pool(x, self.p[i])
+                    # x = self.brelu(x)
+                    # self.convFuncs.append(x)
+                    x = tf.nn.tanh(x)
+                    # self.activeFuncs.append(x)
+                    self.convFuncs.append(x)
+                # with tf.name_scope('pooling'):
+                #    x = self.pool(x, self.p[i])
+        x = x + x1
+
+        x1 = x
+        for i in range(len(self.p)):
+            with tf.variable_scope('conv{}'.format(i + 10)):
+                with tf.name_scope('filter'):
+                    self.convFuncs.append(x)
+                    x = self.filter(x, self.L[0], 10, self.K[0])
+                    self.convFuncs.append(x)
+                with tf.name_scope('bias_relu'):
+                    # x = self.brelu(x)
+                    # self.convFuncs.append(x)
+                    x = tf.nn.tanh(x)
+                    # self.activeFuncs.append(x)
+                    self.convFuncs.append(x)
+                    # with tf.name_scope('pooling'):
+                    #    x = self.pool(x, self.p[i])
+        x = x + x1
+
+
+
+        with tf.variable_scope('convN'):
+            with tf.name_scope('filter'):
+                x = self.filter(x, self.L[0], 1, self.K[0])
+                self.convFuncs.append(x)
+        #     with tf.name_scope('bias_relu'):
+        #         x = self.brelu(x)
+
         
         # Fully connected hidden layers.
         N, M, F = x.get_shape()
         x = tf.reshape(x, [int(N), int(M*F)])  # N x M
-        for i,M in enumerate(self.M[:-1]):
-            with tf.variable_scope('fc{}'.format(i+1)):
-                x = self.fc(x, M)
-                x = tf.nn.dropout(x, dropout)
+        self.activeFuncs.append(x)
+        # for i,M in enumerate(self.M[:-1]):
+        #     with tf.variable_scope('fc{}'.format(i+1)):
+        #         x = self.fc(x, M)
+        #         x = tf.nn.dropout(x, dropout)
         
         # Logits linear layer, i.e. softmax without normalization.
-        with tf.variable_scope('logits'):
-            x = self.fc(x, self.M[-1], relu=False)
+        # TODO: modify tanh
+        # with tf.variable_scope('logits'):
+        #    x = tf.nn.tanh(x)
+            # x = self.fc(x, self.M[-1], relu=False)
         return x
