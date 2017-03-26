@@ -11,7 +11,8 @@ from lib.models import lgcnn2_1
 import sys, os
 sys.path.insert(0, '..')
 from lib import models, graph, coarsening, utils
-
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
 
 import numpy as np
@@ -61,7 +62,7 @@ if __name__ == "__main__":
     # graphs, perm = coarsening.coarsen(A, levels=FLAGS.coarsening_levels, self_connections=False)
     L = [graph.laplacian(A, normalized=True)] #[graph.laplacian(A, normalized=True) for A in graphs]
     print('Execution time: {:.2f}s'.format(time.process_time() - t_start))
-    graph.plot_spectrum(L)
+    # graph.plot_spectrum(L)
     del A
 
 
@@ -184,7 +185,7 @@ if __name__ == "__main__":
         name = 'fgconv_softmax'
         params = common.copy()
         params['dir_name'] += name
-        params['filter'] = 'chebyshev2'
+        params['filter'] = 'fourier'
         params['K'] = [L[0].shape[0]]
         train_pred, test_pred =  model_perf.test(models.cgcnn(L, **params), name, params,
                         train_data, train_labels, val_data, val_labels, test_data, test_labels)
@@ -197,10 +198,10 @@ if __name__ == "__main__":
         print(str(math.sqrt(np.sum((train_target - train_pred) ** 2) / (train_pred.shape[0] * train_pred.shape[1]))))
         print(str(math.sqrt(np.sum((test_target - test_pred) ** 2) / (test_pred.shape[0] * test_pred.shape[1]))))
 
-        plt.figure()
-        plt.plot(train_target[:, 41])
-        plt.plot(train_pred[:, 41])
-        plt.show()
+        # plt.figure()
+        # plt.plot(train_target[:, 41])
+        # plt.plot(train_pred[:, 41])
+        # plt.show()
         print("train finish~")
 
 
