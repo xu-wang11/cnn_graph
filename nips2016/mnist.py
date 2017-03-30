@@ -11,10 +11,6 @@ from lib.models import lgcnn2_1
 import sys, os
 sys.path.insert(0, '..')
 from lib import models, graph, coarsening, utils
-import matplotlib
-matplotlib.use('Agg')
-import matplotlib.pyplot as plt
-
 import numpy as np
 import time
 from nips2016 import humantraffic
@@ -60,7 +56,7 @@ if __name__ == "__main__":
     A = grid_graph(32, corners=False)
     # A = graph.replace_random_edges(A, 0)
     # graphs, perm = coarsening.coarsen(A, levels=FLAGS.coarsening_levels, self_connections=False)
-    L = [graph.laplacian(A, normalized=True)] #[graph.laplacian(A, normalized=True) for A in graphs]
+    L = [graph.laplacian(A, normalized=True)] # [graph.laplacian(A, normalized=True) for A in graphs]
     print('Execution time: {:.2f}s'.format(time.process_time() - t_start))
     # graph.plot_spectrum(L)
     del A
@@ -83,7 +79,8 @@ if __name__ == "__main__":
     node_count = 32 * 32
     t_start = time.process_time()
     ht = humantraffic.HumanTraffic()
-    train_data, val_data, test_data, train_labels, val_labels, test_labels = ht.load_data(seq_num=5)
+    seq_num = 3
+    train_data, val_data, test_data, train_labels, val_labels, test_labels = ht.load_data(seq_num)
     train_data_ = np.zeros((train_data.shape[0], train_data.shape[1], train_data.shape[2]))
 
 
@@ -145,6 +142,7 @@ if __name__ == "__main__":
     # C = max(mnist.train.labels) + 1  # number of classes
 
     model_perf = utils.model_perf()
+    print(train_data.shape)
 
 
     # In[ ]:
@@ -185,8 +183,9 @@ if __name__ == "__main__":
         name = 'fgconv_softmax'
         params = common.copy()
         params['dir_name'] += name
-        params['filter'] = 'fourier'
-        params['K'] = [L[0].shape[0]]
+        params['filter'] = 'chebyshev5'
+        params['K'] = [5]
+        params['C_0'] = seq_num * 2
         train_pred, test_pred =  model_perf.test(models.cgcnn(L, **params), name, params,
                         train_data, train_labels, val_data, val_labels, test_data, test_labels)
 

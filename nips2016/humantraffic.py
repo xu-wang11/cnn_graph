@@ -82,6 +82,7 @@ class HumanTraffic:
 
     def normalize(self, in_matrix, out_matrix):
         self.max_val = np.amax([np.amax(in_matrix), np.amax(out_matrix)])
+        # self.max_val = 1000
         in_matrix = in_matrix / self.max_val # (in_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
         out_matrix = out_matrix / self.max_val # (out_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
         # in_matrix = in_matrix * 2 - 1
@@ -94,10 +95,6 @@ class HumanTraffic:
     def reverse_normalize(self, data):
 
         return self.max_val * data
-
-
-
-
 
 
 if __name__ == "__main__":
