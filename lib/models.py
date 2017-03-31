@@ -963,6 +963,12 @@ class cgcnn(base_model):
         b = self._bias_variable([1, 1, int(F)], regularization=False)
         return tf.nn.relu(x + b)
 
+    def b1tanh(self, x):
+        """Bias and ReLU. One bias per filter."""
+        N, M, F = x.get_shape()
+        b = self._bias_variable([1, 1, int(F)], regularization=False)
+        return tf.nn.tanh(x + b)
+
     def b2relu(self, x):
         """Bias and ReLU. One bias per vertex per filter."""
         N, M, F = x.get_shape()
@@ -998,7 +1004,8 @@ class cgcnn(base_model):
 
     def activation_function(self, x, activation):
         activation_funcs = {'brelu': lambda x:self.brelu(x),
-                            'tanh' : lambda x:tf.nn.tanh(x)}
+                            'brelu2': lambda x:self.b2relu(x),
+                            'tanh' : lambda x:self.b1tanh(x)}
         return activation_funcs[activation](x)
 
     def residual_layer(self, x, nfilter, activation, name_scope):
@@ -1016,7 +1023,7 @@ class cgcnn(base_model):
         # x = tf.expand_dims(x, 2)  # N x M x F=1
         nfilter = 30
         nres_layer_count = 2
-        active_func = 'brelu'
+        active_func = 'tanh'
         # the first layer is to convert N * M * F  to
         with tf.variable_scope('conv_init'):
             with tf.name_scope('filter'):
