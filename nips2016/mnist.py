@@ -17,6 +17,9 @@ from nips2016 import humantraffic
 
 import tensorflow as tf
 import math
+# 配置显存大小
+config = tf.ConfigProto()
+config.gpu_options.per_process_gpu_memory_fraction = 0.6
 
 # In[ ]:
 if __name__ == "__main__":
