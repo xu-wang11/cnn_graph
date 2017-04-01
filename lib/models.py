@@ -12,12 +12,14 @@ NCLASSES = 10
 
 # Common methods for all models
 
+debug_keys=[]
 
 class base_model(object):
     def __init__(self):
         self.regularizers = []
         self.convFuncs = []
         self.activeFuncs = []
+        self.nets ={}
 
     # High-level interface which runs the constructed computational graph.
 
@@ -42,8 +44,8 @@ class base_model(object):
                 batch_labels = np.zeros((self.batch_size, data.shape[1]))
                 batch_labels[:end - begin] = labels[begin:end]
                 feed_dict[self.ph_labels] = batch_labels
-                batch_pred, batch_loss, test1, test2 = sess.run(
-                    [self.op_prediction, self.op_loss, self.convFuncs[-1], self.activeFuncs[-1]], feed_dict)
+                batch_pred, batch_loss = sess.run(
+                    [self.op_prediction, self.op_loss], feed_dict)
                 loss += batch_loss
             else:
                 batch_pred = sess.run(self.op_prediction, feed_dict)
@@ -108,8 +110,18 @@ class base_model(object):
             if type(batch_data) is not np.ndarray:
                 batch_data = batch_data.toarray()  # convert sparse matrices
             feed_dict = {self.ph_data: batch_data, self.ph_labels: batch_labels, self.ph_dropout: self.dropout}
-            learning_rate, loss, loss_average = sess.run([self.op_train, self.op_loss, self.op_loss_average], feed_dict)
+            query_list = [self.op_train, self.op_loss, self.op_loss_average]
+            for k,v in self.nets.items():
+                query_list.append(v)
+            x = sess.run(query_list, feed_dict)
+            learning_rate, loss, loss_average = x[0], x[1], x[2]  # x = sess.run(query_list, feed_dict)
+            parse_result = {}
+            i = 1
+            for k, v in self.nets.items():
+                parse_result[k] = x[2 + i]
+                i += 1
 
+            # print("come to deu")
             # Periodical evaluation of the model.
             if step % self.eval_frequency == 0 or step == num_steps:
                 epoch = step * self.batch_size / train_data.shape[0]
@@ -203,7 +215,8 @@ class base_model(object):
         """Return the predicted classes."""
         with tf.name_scope('prediction'):
             prediction = tf.nn.tanh(logits)  # tf.argmax(logits, axis=1)
-            return prediction
+            self.nets[prediction.name] = prediction
+        return prediction
 
     def loss(self, logits, labels, regularization):
         """Adds to the inference model the layers required to generate loss."""
@@ -213,11 +226,13 @@ class base_model(object):
             #     cross_entropy = tf.nn.sparse_softmax_cross_entropy_with_logits(logits=logits, labels=labels)
             #     cross_entropy = tf.reduce_mean(cross_entropy)
             with tf.name_scope('mse'):
-                cross_entropy = tf.nn.l2_loss(labels - logits)
+                # cross_entropy = tf.nn.l2_loss(labels - logits)
+                cross_entropy = tf.reduce_mean(tf.square(tf.subtract(labels, logits)))
             # with tf.name_scope('regularization'):
             #    regularization *= tf.add_n(self.regularizers)
             # loss = cross_entropy + regularization
             loss = cross_entropy
+            self.nets[loss.name] = loss
             # Summaries for TensorBoard.
             tf.summary.scalar('loss/cross_entropy', cross_entropy)
             tf.summary.scalar('loss/regularization', regularization)
@@ -251,13 +266,15 @@ class base_model(object):
             #     optimizer = tf.train.MomentumOptimizer(learning_rate, momentum)
             optimizer = tf.train.GradientDescentOptimizer(learning_rate)
             grads = optimizer.compute_gradients(loss)
+            # self.nets[grads.name] = grads
             op_gradients = optimizer.apply_gradients(grads, global_step=global_step)
-            # Histograms.
+
             for grad, var in grads:
                 if grad is None:
                     print('warning: {} has no gradient'.format(var.op.name))
                 else:
                     tf.summary.histogram(var.op.name + '/gradients', grad)
+                    self.nets[var.op.name] = grad
             # The op return the learning rate.
 
             with tf.control_dependencies([op_gradients]):
@@ -284,6 +301,7 @@ class base_model(object):
         if regularization:
             self.regularizers.append(tf.nn.l2_loss(var))
         tf.summary.histogram(var.op.name, var)
+        self.nets[var.name] = var
         return var
 
     def _bias_variable(self, shape, regularization=True):
@@ -292,6 +310,7 @@ class base_model(object):
         if regularization:
             self.regularizers.append(tf.nn.l2_loss(var))
         tf.summary.histogram(var.op.name, var)
+        self.nets[var.name] = var
         return var
 
     def _conv2d(self, x, W):
@@ -865,7 +884,8 @@ class cgcnn(base_model):
         return tf.transpose(x, perm=[0, 2, 1])  # N x M x Fout
 
     def fourier(self, x, L, Fout, K):
-        assert K == L.shape[0]  # artificial but useful to compute number of parameters
+        # assert K == L.shape[0]  # artificial but useful to compute number of parameters
+        K = L.shape[0]
         N, M, Fin = x.get_shape()
         N, M, Fin = int(N), int(M), int(Fin)
         # Fourier basis
@@ -1005,7 +1025,7 @@ class cgcnn(base_model):
     def activation_function(self, x, activation):
         activation_funcs = {'brelu': lambda x:self.brelu(x),
                             'brelu2': lambda x:self.b2relu(x),
-                            'tanh' : lambda x:self.b1tanh(x)}
+                            'tanh' : lambda x:tf.nn.tanh(x)}
         return activation_funcs[activation](x)
 
     def residual_layer(self, x, nfilter, activation, name_scope):
@@ -1015,7 +1035,9 @@ class cgcnn(base_model):
                 x = self.filter(x, self.L[0], nfilter, self.K[0])
             with tf.name_scope('activation'):
                 x = self.activation_function(x, activation)
-        return x + x_identity
+            with tf.name_scope('merge'):
+                x = x + x_identity
+        return x
 
 
     def _inference(self, x, dropout):
@@ -1023,24 +1045,32 @@ class cgcnn(base_model):
         # x = tf.expand_dims(x, 2)  # N x M x F=1
         nfilter = 30
         nres_layer_count = 2
-        active_func = 'tanh'
+        active_func = 'brelu'
         # the first layer is to convert N * M * F  to
         with tf.variable_scope('conv_init'):
             with tf.name_scope('filter'):
                 x = self.filter(x, self.L[0], nfilter, self.K[0])
+                self.nets[x.name] = x
             with tf.name_scope('activation'):
-                x = self.activation_function(x, active_func)
-
+                self.nets[x.name] = x
         # residual layer
         for i in range(nres_layer_count):
+
             x = self.residual_layer(x, nfilter, active_func, 'residual_layer_{0}'.format(i))
+            self.nets[x.name] = x
 
         with tf.variable_scope('convN'):
             with tf.name_scope('filter'):
                 x = self.filter(x, self.L[0], 1, self.K[0])
-                self.convFuncs.append(x)
+                self.nets[x.name] = x
 
         N, M, F = x.get_shape()
         x = tf.reshape(x, [int(N), int(M * F)])  # N x M
-        self.activeFuncs.append(x)
+        print(self.nets.keys())
         return x
+
+    # def prediction(self, logits):
+    #         """Return the predicted classes."""
+    #         with tf.name_scope('prediction'):
+    #             prediction = self.# tf.nn.tanh(logits)  # tf.argmax(logits, axis=1)
+    #             return prediction
