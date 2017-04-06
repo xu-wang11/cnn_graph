@@ -2,24 +2,24 @@
 # coding: utf-8
 
 # In[ ]:
-from IPython import get_ipython
-
-from lib.models import lgcnn2_1
-
-
-
 import sys, os
 sys.path.insert(0, '..')
+import matplotlib
+matplotlib.use('Agg')
 from lib import models, graph, coarsening, utils
 import numpy as np
 import time
 from nips2016 import humantraffic
+from tensorflow.python import debug as tf_debug
 
+import matplotlib.pyplot as plt
 import tensorflow as tf
 import math
 # 配置显存大小
-config = tf.ConfigProto()
-config.gpu_options.per_process_gpu_memory_fraction = 0.6
+
+gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.4)
+sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
+
 
 # In[ ]:
 if __name__ == "__main__":
@@ -83,7 +83,9 @@ if __name__ == "__main__":
     t_start = time.process_time()
     ht = humantraffic.HumanTraffic()
     seq_num = 3
-    train_data, val_data, test_data, train_labels, val_labels, test_labels = ht.load_data(seq_num)
+    train_data, val_data, test_data, train_labels, val_labels, test_labels, A = ht.load_data(seq_num)
+    # L = [graph.laplacian(A, normalized=True)] # [graph.laplacian(A, normalized=True) for A in graphs]
+    # del A
     train_data_ = np.zeros((train_data.shape[0], train_data.shape[1], train_data.shape[2]))
 
 
@@ -137,7 +139,7 @@ if __name__ == "__main__":
     common = {}
     common['dir_name']       = 'mnist/'
     common['num_epochs']     = 200
-    common['batch_size']     = 20
+    common['batch_size']     = 40
     common['decay_steps']    = train_data.shape[0] / common['batch_size']
     common['eval_frequency'] = 60
     common['brelu']          = 'b1relu'
@@ -156,7 +158,7 @@ if __name__ == "__main__":
         params['dir_name'] += name
         params['regularization'] = 5e-4
         params['dropout']        = 1
-        params['learning_rate']  = 0.02
+        params['learning_rate']  = 0.0005
         params['decay_rate']     = 0.95
         params['momentum']       = 0.9
         params['F']              = []
@@ -172,7 +174,7 @@ if __name__ == "__main__":
     # Common hyper-parameters for networks with one convolutional layer.
     common['regularization'] = 0
     common['dropout']        = 1
-    common['learning_rate']  = 0.02
+    common['learning_rate']  = 0.01
     common['decay_rate']     = 0.95
     common['momentum']       = 0.9
     common['F']              = [10]
@@ -186,7 +188,8 @@ if __name__ == "__main__":
         name = 'fgconv_softmax'
         params = common.copy()
         params['dir_name'] += name
-        params['filter'] = 'chebyshev5' # fourier
+        # params['filter'] = 'chebyshev5' # fourier
+        params['filter'] = 'fourier'
         params['K'] = [5]
         params['C_0'] = seq_num * 2
         train_pred, test_pred =  model_perf.test(models.cgcnn(L, **params), name, params,
@@ -197,13 +200,14 @@ if __name__ == "__main__":
         #
         # real_data = np.concatenate(train_labels, test_labels)
         # pred_data = np.concatenate(train_pred, test_pred)
-        print(str(math.sqrt(np.sum((train_target - train_pred) ** 2) / (train_pred.shape[0] * train_pred.shape[1]))))
-        print(str(math.sqrt(np.sum((test_target - test_pred) ** 2) / (test_pred.shape[0] * test_pred.shape[1]))))
+        print(str(math.sqrt(np.sum((train_target - train_pred) ** 2) / (train_pred.shape[0] * train_pred.shape[1] * train_pred.shape[2]))))
+        print(str(math.sqrt(np.sum((test_target - test_pred) ** 2) / (test_pred.shape[0] * test_pred.shape[1] * test_pred.shape[2]))))
 
-        # plt.figure()
-        # plt.plot(train_target[:, 41])
-        # plt.plot(train_pred[:, 41])
+        fig = plt.figure()
+        plt.plot(train_target[:, 41])
+        plt.plot(train_pred[:, 41])
         # plt.show()
+        fig.savefig("est.jpg")
         print("train finish~")
 
 
