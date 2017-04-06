@@ -16,6 +16,8 @@ debug_keys=[]
 
 class base_model(object):
     def __init__(self):
+        self.is_train = None
+        self.reuse = None
         self.regularizers = []
         self.convFuncs = []
         self.activeFuncs = []
@@ -26,7 +28,7 @@ class base_model(object):
     def predict(self, data, labels=None, sess=None):
         loss = 0
         size = data.shape[0]
-        predictions = np.empty((size, data.shape[1]))
+        predictions = np.empty((size, data.shape[1], 2))
         sess = self._get_session(sess)
         for begin in range(0, size, self.batch_size):
             end = begin + self.batch_size
@@ -37,11 +39,11 @@ class base_model(object):
             if type(tmp_data) is not np.ndarray:
                 tmp_data = tmp_data.toarray()  # convert sparse matrices
             batch_data[:end - begin] = tmp_data
-            feed_dict = {self.ph_data: batch_data, self.ph_dropout: 1}
+            feed_dict = {self.ph_data: batch_data, self.ph_dropout: 1, self.is_train:False, self.reuse:True}
 
             # Compute loss if labels are given.
             if labels is not None:
-                batch_labels = np.zeros((self.batch_size, data.shape[1]))
+                batch_labels = np.zeros((self.batch_size, data.shape[1], 2))
                 batch_labels[:end - begin] = labels[begin:end]
                 feed_dict[self.ph_labels] = batch_labels
                 batch_pred, batch_loss = sess.run(
@@ -76,7 +78,8 @@ class base_model(object):
         # print(predictions)
         # ncorrects = sum(predictions == labels)
         # accuracy = 100 * sklearn.metrics.accuracy_score(labels, predictions)
-        mse = sklearn.metrics.mean_squared_error(labels, predictions)
+        # mse = sklearn.metrics.mean_squared_error(labels, predictions)
+        mse =  np.sum((labels - predictions) ** 2) / (predictions.shape[0] * predictions.shape[1] * predictions.shape[2])
         # f1 = 100 * sklearn.metrics.f1_score(labels, predictions, average='weighted')
         string = 'mse: {:.5f} ( {:d}), f1 (weighted), loss: {:.2e}'.format(
             mse, len(labels), loss)
@@ -109,7 +112,7 @@ class base_model(object):
             batch_data, batch_labels = train_data[idx, :], train_labels[idx]
             if type(batch_data) is not np.ndarray:
                 batch_data = batch_data.toarray()  # convert sparse matrices
-            feed_dict = {self.ph_data: batch_data, self.ph_labels: batch_labels, self.ph_dropout: self.dropout}
+            feed_dict = {self.ph_data: batch_data, self.ph_labels: batch_labels, self.ph_dropout: self.dropout, self.is_train:True, self.reuse:None}
             query_list = [self.op_train, self.op_loss, self.op_loss_average]
             for k,v in self.nets.items():
                 query_list.append(v)
@@ -166,8 +169,10 @@ class base_model(object):
         with self.graph.as_default():
             # Inputs.
             with tf.name_scope('inputs'):
+                self.is_train = tf.placeholder(tf.bool, name='phase_train')
+                self.reuse = tf.placeholder(tf.bool, name="reuse")
                 self.ph_data = tf.placeholder(tf.float32, (self.batch_size, M_0, C_0), 'data')
-                self.ph_labels = tf.placeholder(tf.float32, (self.batch_size, M_0), 'labels')
+                self.ph_labels = tf.placeholder(tf.float32, (self.batch_size, M_0, 2), 'labels')
                 self.ph_dropout = tf.placeholder(tf.float32, (), 'dropout')
 
             # Model.
@@ -211,10 +216,13 @@ class base_model(object):
             probabilities = tf.nn.softmax(logits)
             return probabilities
 
-    def prediction(self, logits):
+    def prediction(self, x):
         """Return the predicted classes."""
         with tf.name_scope('prediction'):
-            prediction = tf.nn.tanh(logits)  # tf.argmax(logits, axis=1)
+            # N, M = x.get_shape()
+            # b = self._bias_variable([1, 1], regularization=False)
+            # prediction = tf.nn.tanh(x + b)
+            prediction = tf.nn.tanh(x)  # tf.argmax(logits, axis=1)
             self.nets[prediction.name] = prediction
         return prediction
 
@@ -264,7 +272,9 @@ class base_model(object):
             #     #optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
             # else:
             #     optimizer = tf.train.MomentumOptimizer(learning_rate, momentum)
-            optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+            # optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+            optimizer = tf.train.AdamOptimizer(learning_rate)
+            # optimizer = tf.train.AdagradOptimizer(learning_rate)
             grads = optimizer.compute_gradients(loss)
             # self.nets[grads.name] = grads
             op_gradients = optimizer.apply_gradients(grads, global_step=global_step)
@@ -893,7 +903,6 @@ class cgcnn(base_model):
         U = tf.constant(U.T, dtype=tf.float32)
         # Weights
         W = self._weight_variable([M, Fout, Fin], regularization=False)
-        self.convFuncs.append(W)
         return self.filter_in_fourier(x, L, Fout, K, U, W)
 
     def spline(self, x, L, Fout, K):
@@ -981,7 +990,12 @@ class cgcnn(base_model):
         """Bias and ReLU. One bias per filter."""
         N, M, F = x.get_shape()
         b = self._bias_variable([1, 1, int(F)], regularization=False)
-        return tf.nn.relu(x + b)
+        # batch_norm = tf.cond(self.is_train,
+        #                      lambda: tf.contrib.layers.batch_norm(x + b, activation_fn=tf.nn.relu, is_training=True,
+        #                                                           reuse=None, scope="train_norm"),
+        #                      lambda: tf.contrib.layers.batch_norm(x + b, activation_fn=tf.nn.relu, is_training=False,
+        #                                                           reuse=True, name="test_norm"))
+        return tf.nn.relu(x)
 
     def b1tanh(self, x):
         """Bias and ReLU. One bias per filter."""
@@ -1031,10 +1045,16 @@ class cgcnn(base_model):
     def residual_layer(self, x, nfilter, activation, name_scope):
         x_identity = x
         with tf.variable_scope(name_scope):
-            with tf.name_scope('filter'):
-                x = self.filter(x, self.L[0], nfilter, self.K[0])
-            with tf.name_scope('activation'):
-                x = self.activation_function(x, activation)
+            with tf.variable_scope('sublayer0'):
+                with tf.name_scope('filter'):
+                    x = self.filter(x, self.L[0], nfilter, self.K[0])
+                with tf.name_scope('activation'):
+                    x = self.activation_function(x, activation)
+            with tf.variable_scope('sublayer1'):
+                with tf.name_scope('filter2'):
+                    x = self.filter(x, self.L[0], nfilter, self.K[0])
+                with tf.name_scope('activation2'):
+                    x = self.activation_function(x, activation)
             with tf.name_scope('merge'):
                 x = x + x_identity
         return x
@@ -1043,8 +1063,8 @@ class cgcnn(base_model):
     def _inference(self, x, dropout):
         # Graph convolutional layers.
         # x = tf.expand_dims(x, 2)  # N x M x F=1
-        nfilter = 30
-        nres_layer_count = 2
+        nfilter = 64
+        nres_layer_count = 4
         active_func = 'brelu'
         # the first layer is to convert N * M * F  to
         with tf.variable_scope('conv_init'):
@@ -1052,6 +1072,7 @@ class cgcnn(base_model):
                 x = self.filter(x, self.L[0], nfilter, self.K[0])
                 self.nets[x.name] = x
             with tf.name_scope('activation'):
+                x = self.activation_function(x, active_func)
                 self.nets[x.name] = x
         # residual layer
         for i in range(nres_layer_count):
@@ -1061,11 +1082,11 @@ class cgcnn(base_model):
 
         with tf.variable_scope('convN'):
             with tf.name_scope('filter'):
-                x = self.filter(x, self.L[0], 1, self.K[0])
+                x = self.filter(x, self.L[0], 2, self.K[0])
                 self.nets[x.name] = x
 
         N, M, F = x.get_shape()
-        x = tf.reshape(x, [int(N), int(M * F)])  # N x M
+        # x = tf.reshape(x, [int(N), int(M * F)])  # N x M
         print(self.nets.keys())
         return x
 

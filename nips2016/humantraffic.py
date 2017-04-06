@@ -7,6 +7,10 @@
 
 import numpy as np
 from scipy.sparse.csr import csr_matrix
+import scipy
+import math
+import pickle
+import os
 
 class HumanTraffic:
 
@@ -33,18 +37,33 @@ class HumanTraffic:
         out_matrix = out_matrix[1:, 1:]
 
         f2.close()
-        '''
-        f3 = open('edge_weight.txt', 'r')
-        edge_matrix = []
-        for line in f3.readlines():
-            edge_matrix.append([int(v) for v in line[0:-1].split(' ')])
-        edge_matrix = np.array(edge_matrix)
-        edge_matrix = edge_matrix[edge_matrix[:, 0] != 0]
-        edge_matrix = edge_matrix[edge_matrix[:, 1] != 0]
+        edge_matrix = None
+        if os.path.isfile('edge_weight.pkl'):
+            pkl_file = open('edge_weight.pkl', 'rb')
+            edge_matrix = pickle.load(pkl_file)
+            pkl_file.close()
+        else:
+            f3 = open('../data/humanflow/edge_weight.txt', 'r')
+            I = []
+            J = []
+            V = []
 
-        # to sparse matrix
-        edge_matrix = csr_matrix(edge_matrix[:, 2], (edge_matrix[:, 0], edge_matrix[:, 1]))
-        '''
+            for line in f3.readlines():
+                split_items = line[0:-1].split(' ')
+                in_node = int(split_items[0])
+                out_node = int(split_items[1])
+                weight_array = [int(v.strip()) for v in line[line.index('[') + 1: line.index(']')].split(',')]
+                weight_val = np.sum(np.array(weight_array)) * 1.0
+                if weight_val > 600:
+                    I.append(in_node)
+                    J.append(out_node)
+                    V.append(math.log(weight_val))
+            print(len(V))
+            edge_matrix = scipy.sparse.coo_matrix((V, (I, J)), shape=(32 * 32, 32 * 32))
+            pkl_file = open('edge_weight.pkl', 'wb')
+            pickle.dump(edge_matrix, pkl_file)
+            pkl_file.close()
+
         # replace zero columns
         in_matrix[:, 196] = in_matrix[:, 196 - 48]
         out_matrix[:, 196] = out_matrix[:, 196 - 48]
@@ -62,8 +81,8 @@ class HumanTraffic:
         data_labels = []
         for i in range(in_matrix.shape[1] - seq_num):
             data_samples.append(np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1))
-            # data_labels.append(np.concatenate((in_matrix[:, i+3:i+4], out_matrix[:, i+3:i+4]), axis=1))
-            data_labels.append(in_matrix[:, i + seq_num])
+            data_labels.append(np.concatenate((in_matrix[:, i+3:i+4], out_matrix[:, i+3:i+4]), axis=1))
+            # data_labels.append(in_matrix[:, i + seq_num])
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         total_row = data_samples.shape[0]
@@ -78,23 +97,34 @@ class HumanTraffic:
         test_labels = data_labels[train_row + validate_row:, :]
         # normalized
 
-        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
 
     def normalize(self, in_matrix, out_matrix):
-        self.max_val = np.amax([np.amax(in_matrix), np.amax(out_matrix)])
-        # self.max_val = 1000
+        # self.max_val = np.amax([np.amax(in_matrix), np.amax(out_matrix)])
+        self.max_val = 1000
         in_matrix = in_matrix / self.max_val # (in_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
         out_matrix = out_matrix / self.max_val # (out_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
+
+        in_matrix[in_matrix>1] = 1
+        out_matrix[out_matrix>1] = 1
         # in_matrix = in_matrix * 2 - 1
         # out_matrix = out_matrix * 2 - 1
-        # in_matrix[in_matrix>1] = 1
-        # out_matrix[out_matrix>1] = 1
-
+        #in_matrix = np.array(in_matrix) * 1.0
+        #out_matrix = np.array(out_matrix) * 1.0
+        #self.in_avg = np.mean(in_matrix, axis=0)
+        #self.in_std = np.std(in_matrix, axis=0)
+        #self.out_avg = np.mean(out_matrix, axis=0)
+        #self.out_std = np.std(out_matrix, axis=0)
+        #in_matrix -= self.in_avg
+        #in_matrix /= self.in_std
+        #out_matrix -= self.out_avg
+        #ut_matrix /= self.out_std
         return in_matrix, out_matrix
 
     def reverse_normalize(self, data):
-
-        return self.max_val * data
+        # return data * self.in_std + self.in_avg
+        return data * self.max_val
+        # return (data + 1) /2 * self.max_val
 
 
 if __name__ == "__main__":
