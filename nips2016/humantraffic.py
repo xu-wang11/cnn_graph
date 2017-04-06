@@ -12,6 +12,9 @@ import math
 import pickle
 import os
 
+cell_rows = 20
+cell_cols = 20
+
 class HumanTraffic:
 
     def __init__(self):
@@ -22,14 +25,14 @@ class HumanTraffic:
 
     def load_data(self, seq_num):
         # load in_matrix
-        f1 = open('../../data/humanflow/in_matrix.txt', 'r')
+        f1 = open('../../data/in_matrix.txt', 'r')
         in_matrix = []
         for line in f1.readlines():
             in_matrix.append([int(v) for v in line[0:-1].split(' ')])
         in_matrix = np.array(in_matrix)
         in_matrix = in_matrix[1:, 1:]
         f1.close()
-        f2 = open('../../data/humanflow/out_matrix.txt', 'r')
+        f2 = open('../../data/out_matrix.txt', 'r')
         out_matrix = []
         for line in f2.readlines():
             out_matrix.append([int(v) for v in line[0:-1].split(' ')])
@@ -38,12 +41,12 @@ class HumanTraffic:
 
         f2.close()
         edge_matrix = None
-        if os.path.isfile('edge_weight.pkl'):
-            pkl_file = open('edge_weight.pkl', 'rb')
+        if os.path.isfile('../../data/edge_weight.pkl'):
+            pkl_file = open('../../data/edge_weight.pkl', 'rb')
             edge_matrix = pickle.load(pkl_file)
             pkl_file.close()
         else:
-            f3 = open('../data/humanflow/edge_weight.txt', 'r')
+            f3 = open('../../data/edge_weight.txt', 'r')
             I = []
             J = []
             V = []
@@ -59,14 +62,14 @@ class HumanTraffic:
                     J.append(out_node)
                     V.append(math.log(weight_val))
             print(len(V))
-            edge_matrix = scipy.sparse.coo_matrix((V, (I, J)), shape=(32 * 32, 32 * 32))
-            pkl_file = open('edge_weight.pkl', 'wb')
+            edge_matrix = scipy.sparse.coo_matrix((V, (I, J)), shape=(cell_rows * cell_cols, cell_rows * cell_cols))
+            pkl_file = open('../../data/edge_weight.pkl', 'wb')
             pickle.dump(edge_matrix, pkl_file)
             pkl_file.close()
 
         # replace zero columns
-        in_matrix[:, 196] = in_matrix[:, 196 - 48]
-        out_matrix[:, 196] = out_matrix[:, 196 - 48]
+        # in_matrix[:, 196] = in_matrix[:, 196 - 48]
+        # out_matrix[:, 196] = out_matrix[:, 196 - 48]
         # normalize
 
         # max_val = np.amax([np.amax(in_matrix), np.amax(out_matrix)])
@@ -102,8 +105,8 @@ class HumanTraffic:
     def normalize(self, in_matrix, out_matrix):
         # self.max_val = np.amax([np.amax(in_matrix), np.amax(out_matrix)])
         self.max_val = 1000
-        in_matrix = in_matrix / self.max_val # (in_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
-        out_matrix = out_matrix / self.max_val # (out_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
+        in_matrix = in_matrix * 1.0 / self.max_val # (in_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
+        out_matrix = out_matrix * 1.0 / self.max_val # (out_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
 
         in_matrix[in_matrix>1] = 1
         out_matrix[out_matrix>1] = 1
