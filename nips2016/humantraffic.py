@@ -18,14 +18,14 @@ class HumanTraffic:
 
     def load_data(self, seq_num):
         # load in_matrix
-        f1 = open('../data/humanflow/in_matrix.txt', 'r')
+        f1 = open('../../data/humanflow/in_matrix.txt', 'r')
         in_matrix = []
         for line in f1.readlines():
             in_matrix.append([int(v) for v in line[0:-1].split(' ')])
         in_matrix = np.array(in_matrix)
         in_matrix = in_matrix[1:, 1:]
         f1.close()
-        f2 = open('../data/humanflow/out_matrix.txt', 'r')
+        f2 = open('../../data/humanflow/out_matrix.txt', 'r')
         out_matrix = []
         for line in f2.readlines():
             out_matrix.append([int(v) for v in line[0:-1].split(' ')])
