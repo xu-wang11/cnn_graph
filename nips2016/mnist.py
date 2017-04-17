@@ -189,7 +189,7 @@ if __name__ == "__main__":
         params = common.copy()
         params['dir_name'] += name
         # params['filter'] = 'chebyshev5' # fourier
-        params['filter'] = 'fourier'
+        params['filter'] = 'chebyshev5'
         params['K'] = [5]
         params['C_0'] = seq_num * 2
         train_pred, test_pred =  model_perf.test(models.cgcnn(L, **params), name, params,

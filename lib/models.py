@@ -103,7 +103,7 @@ class base_model(object):
         indices = collections.deque()
         num_steps = int(self.num_epochs * train_data.shape[0] / self.batch_size)
         for step in range(1, num_steps + 1):
-
+            # print(train_data.shape)
             # Be sure to have used all the samples before using one a second time.
             if len(indices) < self.batch_size:
                 indices.extend(np.random.permutation(train_data.shape[0]))
@@ -129,7 +129,7 @@ class base_model(object):
             if step % self.eval_frequency == 0 or step == num_steps:
                 epoch = step * self.batch_size / train_data.shape[0]
                 print('step {} / {} (epoch {:.2f} / {}):'.format(step, num_steps, epoch, self.num_epochs))
-                # print('  learning_rate = {:.2e}, loss_average = {:.2e}'.format(learning_rate, loss_average))
+                print('  learning_rate = {:.2e}, loss_average = {:.2e}'.format(learning_rate, loss_average))
                 string, accuracy, f1, loss, no_use = self.evaluate(val_data, val_labels, sess)
                 accuracies.append(accuracy)
                 losses.append(loss)
@@ -267,11 +267,11 @@ class base_model(object):
                     learning_rate, global_step, decay_steps, decay_rate, staircase=True)
             tf.summary.scalar('learning_rate', learning_rate)
             # Optimizer.
-            # if momentum == 0:
-            #     optimizer = tf.train.GradientDescentOptimizer(learning_rate)
-            #     #optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
-            # else:
-            #     optimizer = tf.train.MomentumOptimizer(learning_rate, momentum)
+            #if momentum == 0:
+            #    optimizer = tf.train.GradientDescentOptimizer(learning_rate)
+            #optimizer = tf.train.AdamOptimizer(learning_rate=0.001)
+            #else:
+            #    optimizer = tf.train.MomentumOptimizer(learning_rate, momentum)
             # optimizer = tf.train.GradientDescentOptimizer(learning_rate)
             optimizer = tf.train.AdamOptimizer(learning_rate)
             # optimizer = tf.train.AdagradOptimizer(learning_rate)
@@ -995,7 +995,7 @@ class cgcnn(base_model):
         #                                                           reuse=None, scope="train_norm"),
         #                      lambda: tf.contrib.layers.batch_norm(x + b, activation_fn=tf.nn.relu, is_training=False,
         #                                                           reuse=True, name="test_norm"))
-        return tf.nn.relu(x)
+        return tf.nn.relu(x + b)
 
     def b1tanh(self, x):
         """Bias and ReLU. One bias per filter."""
@@ -1055,8 +1055,8 @@ class cgcnn(base_model):
                     x = self.filter(x, self.L[0], nfilter, self.K[0])
                 with tf.name_scope('activation2'):
                     x = self.activation_function(x, activation)
-            with tf.name_scope('merge'):
-                x = x + x_identity
+            #with tf.name_scope('merge'):
+            #    x = x + x_identity
         return x
 
 
@@ -1064,7 +1064,7 @@ class cgcnn(base_model):
         # Graph convolutional layers.
         # x = tf.expand_dims(x, 2)  # N x M x F=1
         nfilter = 64
-        nres_layer_count = 4
+        nres_layer_count = 1
         active_func = 'brelu'
         # the first layer is to convert N * M * F  to
         with tf.variable_scope('conv_init'):
