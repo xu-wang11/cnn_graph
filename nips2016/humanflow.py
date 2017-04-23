@@ -6,7 +6,7 @@
 
 
 # In[ ]:
-import sys, os
+import sys, os        
 sys.path.insert(0, '..')
 from lib import models, graph, coarsening, utils
 import numpy as np
@@ -14,19 +14,21 @@ import time
 from nips2016 import humantraffic
 from tensorflow.python import debug as tf_debug
 # get_ipython().magic('matplotlib inline')
-import matplotlib.pyplot as plt
+# import matplotlib.pyplot as plt
 import tensorflow as tf
 import math
+
 # notification
 sys.path.insert(0, '../../')
-from CoreUtils.SendNotification import send_notification
-from CoreUtils import SendNotification
-SendNotification.http_config = '59.66.107.133'
+
 
 # 配置显存大小
 gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.4)
 sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
-
+#config = tf.ConfigProto(
+#         device_count = {'GPU': 0}
+#     )
+# sess = tf.Session(config=config)
 
 # In[ ]:
 
@@ -46,17 +48,24 @@ flags.DEFINE_string('dir_data', os.path.join('..', 'data', 'mnist'), 'Directory 
 
 # In[2]:
 
-print('current path is {0}'.format(os.getcwd()))
+from CoreUtils.SendNotification import send_notification
+from CoreUtils import SendNotification
+# SendNotification.http_config = '59.66.107.166'
+SendNotification.http_config = '192.168.34.138'
 
 
 # In[3]:
+
+print('current path is {0}'.format(os.getcwd()))
+
+
+# In[4]:
 
 # In[ ]:
 def sparse_matrix_element_wise_max(A, B):
     BisBigger = A-B
     BisBigger.data = np.where(BisBigger.data < 0, 1, 0)
     return A - A.multiply(BisBigger) + B.multiply(BisBigger)
-
 def grid_graph(m, corners=False):
     z = graph.grid(m)
     dist, idx = graph.distance_sklearn_metrics(z, k=FLAGS.number_edges, metric=FLAGS.metric)
@@ -75,48 +84,48 @@ def grid_graph(m, corners=False):
     return A
 
 t_start = time.process_time()
-A = grid_graph(20, corners=False)
-A = A.astype(np.float32)
+A = grid_graph(32, corners=False)
 # A = graph.replace_random_edges(A, 0)
 # graphs, perm = coarsening.coarsen(A, levels=FLAGS.coarsening_levels, self_connections=False)
-# L = [graph.laplacian(A, normalized=True)] # [graph.laplacian(A, normalized=True) for A in graphs]
+L = [graph.laplacian(A, normalized=True)] # [graph.laplacian(A, normalized=True) for A in graphs]
 print('Execution time: {:.2f}s'.format(time.process_time() - t_start))
 # graph.plot_spectrum(L)
 # del A
 
 
-# In[4]:
+# In[5]:
 
 # experiment init
-DATA_SET_PATH='../../data/lndata'
+# DATA_SET_PATH='../../data/lndata'
+# DATA_SET_PATH='../../data/lndata_filter'
+DATA_SET_PATH='../../data/bjtaxi'
 # DATA_SET_PATH='../../data/shanxidata'
 seq_num = 3
 t_start = time.process_time()
 ht = humantraffic.HumanTraffic(DATA_SET_PATH)
-train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_data(seq_num)
-A1 = A1.astype(np.float32)
-A = sparse_matrix_element_wise_max(A, A1)
-A = A.astype(np.float32)
-L = [graph.laplacian(A, normalized=True)] # [graph.laplacian(A, normalized=True) for A in graphs]
-del A
-
+train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data(seq_num)
+# A1 = A1.astype(np.float32)
+# A = sparse_matrix_element_wise_max(A, A1)
+# A = A.astype(np.float32)
+# L = [graph.laplacian(A1, normalized=True)] # [graph.laplacian(A, normalized=True) for A in graphs]
+#del A
 train_data_ = np.zeros((train_data.shape[0], train_data.shape[1], train_data.shape[2]))
 print('Execution time: {:.2f}s'.format(time.process_time() - t_start))
 
 
-# In[5]:
+# In[6]:
 
 print(train_labels.shape)
-#plt.plot(train_labels[:, 69])
+# plt.plot(train_labels[:, 69])
 
 
-# In[6]:
+# In[7]:
 
 # In[ ]:
 common = {}
 common['dir_name']       = 'mnist/'
-common['num_epochs']     = 100
-common['batch_size']     = 32
+common['num_epochs']     = 50
+common['batch_size']     = 100
 common['decay_steps']    = train_data.shape[0] / common['batch_size']
 common['eval_frequency'] = 100
 common['brelu']          = 'b1relu'
@@ -136,25 +145,30 @@ common['p']              = [1]
 common['M']              = [train_data.shape[1]]
 
 
-# In[7]:
-
-
+# In[8]:
 
 # In[ ]:
 
-if False:
+if True:
+    
+    # sess = tf.Session(config=config)
+    start_time = time.time()
     name = 'fgconv_softmax'
     params = common.copy()
     params['dir_name'] += name
     #params['filter'] = 'chebyshev2' # fourier
     params['filter'] = 'fourier'
+    params['_nfilter'] = 64
+    params['_nres_layer_count'] = 4
     params['K'] = [20]
     params['C_0'] = seq_num * 2
     train_pred, test_pred =  model_perf.test(models.cgcnn(L, **params), name, params,
-                    train_data, train_labels, val_data, val_labels, test_data, test_labels)
+                    [train_data], train_labels, val_data, val_labels, test_data, test_labels)
 
     train_pred, test_pred = ht.reverse_normalize(train_pred), ht.reverse_normalize(test_pred)
     train_target, test_target = ht.reverse_normalize(train_labels), ht.reverse_normalize(test_labels)
+    end_time = time.time()
+    print("total time {0} elapse...\n".format(end_time - start_time))
     #
     # real_data = np.concatenate(train_labels, test_labels)
     # pred_data = np.concatenate(train_pred, test_pred)
@@ -171,13 +185,13 @@ if False:
 
 # In[ ]:
 
-if False:
+if True:
     name = 'spline_softmax'
     params = common.copy()
     params['dir_name'] += name
     #params['filter'] = 'chebyshev2' # fourier
     params['filter'] = 'spline'
-    params['K'] = [20]
+    params['K'] = [10]
     params['C_0'] = seq_num * 2
     train_pred, test_pred =  model_perf.test(models.cgcnn(L, **params), name, params,
                     train_data, train_labels, val_data, val_labels, test_data, test_labels)
@@ -193,15 +207,16 @@ if False:
     send_notification('cnn_graph finished part 2', 'cnn_grpah')
 
 
-# In[8]:
+# In[ ]:
 
 if True:
+    
     name = 'chebyshev_softmax'
     params = common.copy()
     params['dir_name'] += name
     #params['filter'] = 'chebyshev2' # fourier
     params['filter'] = 'chebyshev5'
-    params['K'] = [10]
+    params['K'] = [5]
     params['C_0'] = seq_num * 2
     train_pred, test_pred =  model_perf.test(models.cgcnn(L, **params), name, params,
                     train_data, train_labels, val_data, val_labels, test_data, test_labels)
@@ -230,18 +245,18 @@ print(train_pred.shape)
 
 # In[ ]:
 
-fig = plt.figure()
-fig.set_size_inches(15, 10)
-plt.plot(train_target[:, 68, 1])
-plt.plot(train_pred[:, 68, 1])
-
-
-# In[ ]:
-
-fig = plt.figure()
-fig.set_size_inches(15, 10)
-plt.plot(test_target[:, 68, 1])
-plt.plot(test_pred[:, 68, 1])
+# fig = plt.figure()
+# fig.set_size_inches(15, 10)
+# plt.plot(train_target[:, 68, 1])
+# plt.plot(train_pred[:, 68, 1])
+#
+#
+# # In[ ]:
+#
+# fig = plt.figure()
+# fig.set_size_inches(15, 10)
+# plt.plot(test_target[:, 68, 1])
+# plt.plot(test_pred[:, 68, 1])
 
 
 # In[ ]:

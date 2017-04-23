@@ -101,7 +101,7 @@ class base_model(object):
         accuracies = []
         losses = []
         indices = collections.deque()
-        num_steps = int(self.num_epochs * train_data.shape[0] / self.batch_size)
+        num_steps = int(self.num_epochs * train_data.shape[1] / self.batch_size)
         for step in range(1, num_steps + 1):
             # print(train_data.shape)
             # Be sure to have used all the samples before using one a second time.
@@ -162,8 +162,8 @@ class base_model(object):
         return val
 
     # Methods to construct the computational graph.
-
-    def build_graph(self, M_0, C_0):
+    # S_0 is stack number
+    def build_graph(self, M_0, C_0, S_0):
         """Build the computational graph of the model."""
         self.graph = tf.Graph()
         with self.graph.as_default():
@@ -171,7 +171,7 @@ class base_model(object):
             with tf.name_scope('inputs'):
                 self.is_train = tf.placeholder(tf.bool, name='phase_train')
                 self.reuse = tf.placeholder(tf.bool, name="reuse")
-                self.ph_data = tf.placeholder(tf.float32, (self.batch_size, M_0, C_0), 'data')
+                self.ph_data = tf.placeholder(tf.float32, (S_0, self.batch_size, M_0, C_0), 'data')
                 self.ph_labels = tf.placeholder(tf.float32, (self.batch_size, M_0, 2), 'labels')
                 self.ph_dropout = tf.placeholder(tf.float32, (), 'dropout')
 
@@ -222,7 +222,9 @@ class base_model(object):
             # N, M = x.get_shape()
             # b = self._bias_variable([1, 1], regularization=False)
             # prediction = tf.nn.tanh(x + b)
-            prediction = tf.nn.tanh(x)  # tf.argmax(logits, axis=1)
+            #prediction = x
+            prediction = tf.nn.relu(x)  # tf.argmax(logits, axis=1)
+            # prediction = tf.clip_by_value(prediction, 0, 1)
             self.nets[prediction.name] = prediction
         return prediction
 
@@ -275,6 +277,7 @@ class base_model(object):
             # optimizer = tf.train.GradientDescentOptimizer(learning_rate)
             optimizer = tf.train.AdamOptimizer(learning_rate)
             # optimizer = tf.train.AdagradOptimizer(learning_rate)
+            # optimizer = tf.train.AdadeltaOptimizer(learning_rate)
             grads = optimizer.compute_gradients(loss)
             # self.nets[grads.name] = grads
             op_gradients = optimizer.apply_gradients(grads, global_step=global_step)
@@ -813,19 +816,22 @@ class cgcnn(base_model):
         dir_name: Name for directories (summaries and model parameters).
     """
 
-    def __init__(self, L, F, K, p, M, filter='chebyshev5', brelu='b1relu', pool='mpool1',
+    def __init__(self, L, F, K, p, M, _STACK_NUM=1, _nfilter=64, _nres_layer_count=4, filter='chebyshev5', brelu='b1relu', pool='mpool1',
                  num_epochs=20, learning_rate=0.1, decay_rate=0.95, decay_steps=None, momentum=0.9,
                  regularization=0, dropout=0, batch_size=100, eval_frequency=200,
                  dir_name='', C_0=6):
         super().__init__()
-
+        
+        self.nfilter = _nfilter
+        self.nres_layer_count = _nres_layer_count
+        self.stack_num = _STACK_NUM
         # Verify the consistency w.r.t. the number of layers.
         assert len(L) >= len(F) == len(K) == len(p)
         assert np.all(np.array(p) >= 1)
         p_log2 = np.where(np.array(p) > 1, np.log2(p), 0)
         assert np.all(np.mod(p_log2, 1) == 0)  # Powers of 2.
         assert len(L) >= 1 + np.sum(p_log2)  # Enough coarsening levels for pool sizes.
-
+        assert _STACK_NUM > 0
         # Keep the useful Laplacians only. May be zero.
         M_0 = L[0].shape[0]
         j = 0
@@ -873,7 +879,7 @@ class cgcnn(base_model):
         self.pool = getattr(self, pool)
 
         # Build the computational graph.
-        self.build_graph(M_0, C_0)
+        self.build_graph(M_0, C_0, self.stack_num)
 
     def filter_in_fourier(self, x, L, Fout, K, U, W):
         # TODO: N x F x M would avoid the permutations
@@ -989,13 +995,13 @@ class cgcnn(base_model):
     def b1relu(self, x):
         """Bias and ReLU. One bias per filter."""
         N, M, F = x.get_shape()
-        b = self._bias_variable([1, 1, int(F)], regularization=False)
+        # b = self._bias_variable([1, 1, int(F)], regularization=False)
         # batch_norm = tf.cond(self.is_train,
         #                      lambda: tf.contrib.layers.batch_norm(x + b, activation_fn=tf.nn.relu, is_training=True,
         #                                                           reuse=None, scope="train_norm"),
         #                      lambda: tf.contrib.layers.batch_norm(x + b, activation_fn=tf.nn.relu, is_training=False,
         #                                                           reuse=True, name="test_norm"))
-        return tf.nn.relu(x + b)
+        return tf.nn.relu(x)
 
     def b1tanh(self, x):
         """Bias and ReLU. One bias per filter."""
@@ -1048,23 +1054,41 @@ class cgcnn(base_model):
             with tf.variable_scope('sublayer0'):
                 with tf.name_scope('filter'):
                     x = self.filter(x, self.L[0], nfilter, self.K[0])
-                with tf.name_scope('activation'):
-                    x = self.activation_function(x, activation)
+                # with tf.name_scope('activation'):
+                    # x = self.activation_function(x, activation)
             with tf.variable_scope('sublayer1'):
                 with tf.name_scope('filter2'):
                     x = self.filter(x, self.L[0], nfilter, self.K[0])
+                with tf.name_scope('merge'):
+                    x = x + x_identity
                 with tf.name_scope('activation2'):
                     x = self.activation_function(x, activation)
-            #with tf.name_scope('merge'):
-            #    x = x + x_identity
         return x
 
 
     def _inference(self, x, dropout):
         # Graph convolutional layers.
         # x = tf.expand_dims(x, 2)  # N x M x F=1
-        nfilter = 64
-        nres_layer_count = 1
+        x_arr = tf.unstack(x)
+
+        if self.stack_num == 1:
+            return self.residual_network(x_arr[0])
+        else:
+            with tf.variable_scope('final_merge'):
+                X = None
+                for i in range(self.stack_num):
+                    with tf.name_scope('C_{0}'.format(i)):
+                        x1 = self.residual_network(x_arr[i])
+                        N, M, F = x1.get_shape()
+                        w1 = self._weight_variable([M, F])
+                    X = X + x1 * w1
+            return X
+
+
+
+    def residual_network(self, x):
+        nfilter = self.nfilter
+        nres_layer_count = self.nres_layer_count
         active_func = 'brelu'
         # the first layer is to convert N * M * F  to
         with tf.variable_scope('conv_init'):
