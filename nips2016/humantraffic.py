@@ -59,6 +59,47 @@ class HumanTraffic:
 
         return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, None
 
+    def load_bj_data_period_trend(self, seq_num):
+        ln_data = loadmat(os.path.join(self.dataset_path, 'bj_data.mat'))
+        # edge_matrix = loadmat(os.path.join(self.dataset_path, 'edge_matrix.mat'))['edge_matrix']
+        # edge_matrix = edge_matrix.multiply(edge_matrix>=400)
+        # edge_matrix.eliminate_zeros()
+        # edge_matrix.data = np.log10(edge_matrix.data)
+        in_matrix = ln_data['inmatrix']
+        out_matrix = ln_data['outmatrix']
+        in_matrix, out_matrix = self.normalize(in_matrix, out_matrix)
+
+        # train data test dat             a
+        data_samples = []
+        data_labels = []
+        for i in range(48 * 7 - 3, in_matrix.shape[1] - seq_num):
+            x1 = np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1)
+            x2 = np.concatenate((in_matrix[:, i+3 - 48: i + 2: 48], out_matrix[:, i + 3 - 48: i + 2: 48]), axis=1)
+            x3 = np.concatenate((in_matrix[:, i + 3 - (48 * 7): i + 2: 48 * 7], out_matrix[:, i + 3 - 48 * 7: i + 2: 48 * 7]), axis=1)
+            data_samples.append(np.concatenate((x1, x2, x3), axis=1))
+            data_labels.append(np.concatenate((in_matrix[:, i + 3:i + 4], out_matrix[:, i + 3:i + 4]), axis=1))
+            # data_labels.append(in_matrix[:, i + seq_num])
+        data_samples = np.array(data_samples)
+        data_labels = np.array(data_labels)
+        print('shape of data_samples: {0}'.format(data_samples.shape[0]))
+        # shuffle_array = np.random.permutation(data_samples.shape[0])
+        # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
+        # data_samples = data_samples[shuffle_array]
+        # data_labels = data_labels[shuffle_array]
+        total_row = data_samples.shape[0]
+        train_row = int(total_row * 0.75)
+        validate_row = int(total_row * 0.125)
+
+        train_data = data_samples[0:train_row, :]
+        validate_data = data_samples[train_row: train_row + validate_row, :]
+        test_data = data_samples[train_row + validate_row:, :]
+        train_labels = data_labels[0: train_row, :]
+        validate_labels = data_labels[train_row: train_row + validate_row, :]
+        test_labels = data_labels[train_row + validate_row:, :]
+        # normalized
+
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, None
+
         
     def load_data(self, seq_num):
         # load in_matrix

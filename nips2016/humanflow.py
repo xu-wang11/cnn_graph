@@ -103,7 +103,7 @@ DATA_SET_PATH='../../data/bjtaxi'
 seq_num = 3
 t_start = time.process_time()
 ht = humantraffic.HumanTraffic(DATA_SET_PATH)
-train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data(seq_num)
+train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data_period_trend(seq_num)
 # A1 = A1.astype(np.float32)
 # A = sparse_matrix_element_wise_max(A, A1)
 # A = A.astype(np.float32)
@@ -136,7 +136,7 @@ print(train_data.shape)
 # Common hyper-parameters for networks with one convolutional layer.
 common['regularization'] = 0
 common['dropout']        = 1
-common['learning_rate']  = 0.02
+common['learning_rate']  = 0.005
 common['decay_rate']     = 0.9
 common['momentum']       = 0.9
 common['F']              = [10]
@@ -160,10 +160,12 @@ if True:
     params['filter'] = 'fourier'
     params['_nfilter'] = 64
     params['_nres_layer_count'] = 4
+    params['_STACK_NUM'] = 3
     params['K'] = [20]
-    params['C_0'] = seq_num * 2
+    params['C_0'] = [seq_num * 2, 2, 2]
+
     train_pred, test_pred =  model_perf.test(models.cgcnn(L, **params), name, params,
-                    [train_data], train_labels, val_data, val_labels, test_data, test_labels)
+                    train_data, train_labels, val_data, val_labels, test_data, test_labels)
 
     train_pred, test_pred = ht.reverse_normalize(train_pred), ht.reverse_normalize(test_pred)
     train_target, test_target = ht.reverse_normalize(train_labels), ht.reverse_normalize(test_labels)
@@ -184,7 +186,7 @@ if True:
 
 
 # In[ ]:
-
+'''
 if True:
     name = 'spline_softmax'
     params = common.copy()
@@ -231,7 +233,7 @@ if True:
     print('train finish...\n')
     send_notification('cnn_graph finished part 3', 'cnn_grpah')
 
-
+'''
 # In[ ]:
 
 print(train_data.shape)

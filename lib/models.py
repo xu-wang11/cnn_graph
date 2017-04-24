@@ -101,7 +101,7 @@ class base_model(object):
         accuracies = []
         losses = []
         indices = collections.deque()
-        num_steps = int(self.num_epochs * train_data.shape[1] / self.batch_size)
+        num_steps = int(self.num_epochs * train_data.shape[0] / self.batch_size)
         for step in range(1, num_steps + 1):
             # print(train_data.shape)
             # Be sure to have used all the samples before using one a second time.
@@ -114,15 +114,15 @@ class base_model(object):
                 batch_data = batch_data.toarray()  # convert sparse matrices
             feed_dict = {self.ph_data: batch_data, self.ph_labels: batch_labels, self.ph_dropout: self.dropout, self.is_train:True, self.reuse:None}
             query_list = [self.op_train, self.op_loss, self.op_loss_average]
-            for k,v in self.nets.items():
-                query_list.append(v)
+            # for k,v in self.nets.items():
+            #     query_list.append(v)
             x = sess.run(query_list, feed_dict)
             learning_rate, loss, loss_average = x[0], x[1], x[2]  # x = sess.run(query_list, feed_dict)
             parse_result = {}
             i = 1
-            for k, v in self.nets.items():
-                parse_result[k] = x[2 + i]
-                i += 1
+            # for k, v in self.nets.items():
+            #     parse_result[k] = x[2 + i]
+            #     i += 1
 
             # print("come to deu")
             # Periodical evaluation of the model.
@@ -163,7 +163,7 @@ class base_model(object):
 
     # Methods to construct the computational graph.
     # S_0 is stack number
-    def build_graph(self, M_0, C_0, S_0):
+    def build_graph(self, M_0, C_0):
         """Build the computational graph of the model."""
         self.graph = tf.Graph()
         with self.graph.as_default():
@@ -171,7 +171,7 @@ class base_model(object):
             with tf.name_scope('inputs'):
                 self.is_train = tf.placeholder(tf.bool, name='phase_train')
                 self.reuse = tf.placeholder(tf.bool, name="reuse")
-                self.ph_data = tf.placeholder(tf.float32, (S_0, self.batch_size, M_0, C_0), 'data')
+                self.ph_data = tf.placeholder(tf.float32, (self.batch_size, M_0, C_0), 'data')
                 self.ph_labels = tf.placeholder(tf.float32, (self.batch_size, M_0, 2), 'labels')
                 self.ph_dropout = tf.placeholder(tf.float32, (), 'dropout')
 
@@ -819,7 +819,7 @@ class cgcnn(base_model):
     def __init__(self, L, F, K, p, M, _STACK_NUM=1, _nfilter=64, _nres_layer_count=4, filter='chebyshev5', brelu='b1relu', pool='mpool1',
                  num_epochs=20, learning_rate=0.1, decay_rate=0.95, decay_steps=None, momentum=0.9,
                  regularization=0, dropout=0, batch_size=100, eval_frequency=200,
-                 dir_name='', C_0=6):
+                 dir_name='', C_0=[6]):
         super().__init__()
         
         self.nfilter = _nfilter
@@ -879,7 +879,9 @@ class cgcnn(base_model):
         self.pool = getattr(self, pool)
 
         # Build the computational graph.
-        self.build_graph(M_0, C_0, self.stack_num)
+        self.C_0 = C_0
+
+        self.build_graph(M_0, np.sum(self.C_0))
 
     def filter_in_fourier(self, x, L, Fout, K, U, W):
         # TODO: N x F x M would avoid the permutations
@@ -1069,19 +1071,32 @@ class cgcnn(base_model):
     def _inference(self, x, dropout):
         # Graph convolutional layers.
         # x = tf.expand_dims(x, 2)  # N x M x F=1
-        x_arr = tf.unstack(x)
-
         if self.stack_num == 1:
-            return self.residual_network(x_arr[0])
+            return self.residual_network(x)
         else:
+            # x = tf.expand_dims(x, 3)
+            N, M, F = x.get_shape()
+            N, M, F = int(N), int(M), int(F)
+            x = tf.reshape(x, [N, M, np.sum(self.C_0), 1])
+            # x = tf.transpose(x, [0, 1, 3, 2])
+            x_arr = tf.unstack(x, axis=2)
+            X_0 = tf.concat(x_arr[0:6], axis=2)
+            X_1 = tf.concat(x_arr[6:8], axis=2)
+            X_2 = tf.concat(x_arr[8:10], axis=2)
+            x_arr = [X_0, X_1, X_2]
             with tf.variable_scope('final_merge'):
                 X = None
                 for i in range(self.stack_num):
-                    with tf.name_scope('C_{0}'.format(i)):
-                        x1 = self.residual_network(x_arr[i])
-                        N, M, F = x1.get_shape()
-                        w1 = self._weight_variable([M, F])
-                    X = X + x1 * w1
+                    with tf.variable_scope('VC_{0}'.format(i)):
+                        with tf.name_scope('C_{0}'.format(i)):
+                            x1 = self.residual_network(x_arr[i])
+                            # x1 = tf.nn.relu(x1)
+                            N, M, F = x1.get_shape()
+                            w1 = self._weight_variable([M, F])
+                        if i == 0:
+                            X = x1 * w1
+                        else:
+                            X = X + x1 * w1
             return X
 
 
