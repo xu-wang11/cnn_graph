@@ -96,12 +96,14 @@ class base_model(object):
         os.makedirs(self._get_path('checkpoints'))
         path = os.path.join(self._get_path('checkpoints'), 'model')
         sess.run(self.op_init)
+        sess.graph.finalize()
 
         # Training.
         accuracies = []
         losses = []
         indices = collections.deque()
         num_steps = int(self.num_epochs * train_data.shape[0] / self.batch_size)
+        start_time = time.time()
         for step in range(1, num_steps + 1):
             # print(train_data.shape)
             # Be sure to have used all the samples before using one a second time.
@@ -136,6 +138,9 @@ class base_model(object):
                 print('  validation {}'.format(string))
                 print('  time: {:.0f}s (wall {:.0f}s)'.format(time.process_time() - t_process, time.time() - t_wall))
 
+                end_time = time.time()
+                print("time spend {0}...:\n".format(end_time - start_time))
+                start_time = time.time()
                 # Summaries for TensorBoard.
                 summary = tf.Summary()
                 summary.ParseFromString(sess.run(self.op_summary, feed_dict))
@@ -1051,20 +1056,30 @@ class cgcnn(base_model):
         return activation_funcs[activation](x)
 
     def residual_layer(self, x, nfilter, activation, name_scope):
-        x_identity = x
-        with tf.variable_scope(name_scope):
-            with tf.variable_scope('sublayer0'):
-                with tf.name_scope('filter'):
-                    x = self.filter(x, self.L[0], nfilter, self.K[0])
-                # with tf.name_scope('activation'):
-                    # x = self.activation_function(x, activation)
-            with tf.variable_scope('sublayer1'):
-                with tf.name_scope('filter2'):
-                    x = self.filter(x, self.L[0], nfilter, self.K[0])
-                with tf.name_scope('merge'):
-                    x = x + x_identity
-                with tf.name_scope('activation2'):
-                    x = self.activation_function(x, activation)
+        flag = False
+        if flag is True:
+            x_identity = x
+            with tf.variable_scope(name_scope):
+                with tf.variable_scope('sublayer0'):
+                    with tf.name_scope('filter'):
+                        x = self.filter(x, self.L[0], nfilter, self.K[0])
+                    with tf.name_scope('activation'):
+                        x = self.activation_function(x, activation)
+                with tf.variable_scope('sublayer1'):
+                    with tf.name_scope('filter2'):
+                        x = self.filter(x, self.L[0], nfilter, self.K[0])
+                    with tf.name_scope('merge'):
+                        x = x + x_identity
+                    with tf.name_scope('activation2'):
+                        x = self.activation_function(x, activation)
+
+        else:
+            with tf.variable_scope(name_scope):
+                with tf.variable_scope('sublayer0'):
+                    with tf.name_scope('filter'):
+                        x = self.filter(x, self.L[0], nfilter, self.K[0])
+                    with tf.name_scope('activation'):
+                        x = self.activation_function(x, activation)
         return x
 
 

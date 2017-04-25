@@ -100,6 +100,58 @@ class HumanTraffic:
 
         return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, None
 
+    # only use nodes contains edges
+    def load_unisolate_data(self, seq_num):
+        ln_data = loadmat(os.path.join(self.dataset_path, 'ln_data.mat'))
+        in_matrix = ln_data['inmatrix']
+        out_matrix = ln_data['outmatrix']
+        edge_matrix = loadmat(os.path.join(self.dataset_path, 'edge_matrix.mat'))['edge_matrix']
+        edge_matrix = edge_matrix.todense()
+
+        edge_sum = np.sum(edge_matrix, axis=1)
+        node_list = np.where(edge_sum != 0)
+        edge_matrix = edge_matrix[np.ix_(node_list[0], node_list[0])]
+        in_matrix = in_matrix[node_list[0], :]
+        out_matrix = out_matrix[node_list[0], :]
+        print('current nnz is {0}\n'.format(np.count_nonzero(edge_matrix)))
+        edge_matrix[edge_matrix < 400] = 0
+        print('current nnz is {0}\n'.format(np.count_nonzero(edge_matrix)))
+        # to symmetrical
+        edge_matrix = edge_matrix + np.transpose(edge_matrix)
+        node_list = np.where(np.sum(edge_matrix, axis=1) != 0)[0]
+        edge_matrix = edge_matrix[np.ix_(node_list, node_list)]
+        in_matrix = in_matrix[node_list]
+        out_matrix = out_matrix[node_list]
+        edge_matrix[edge_matrix > 0] = 1
+        edge_matrix = csr_matrix(edge_matrix)
+        in_matrix, out_matrix = self.normalize(in_matrix, out_matrix)
+        # train data test data
+        data_samples = []
+        data_labels = []
+        for i in range(in_matrix.shape[1] - seq_num):
+            data_samples.append(np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1))
+            data_labels.append(np.concatenate((in_matrix[:, i+3:i+4], out_matrix[:, i+3:i+4]), axis=1))
+            # data_labels.append(in_matrix[:, i + seq_num])
+        data_samples = np.array(data_samples)
+        data_labels = np.array(data_labels)
+        print('shape of data_samples: {0}'.format(data_samples.shape[0]))
+        # shuffle_array = np.random.permutation(data_samples.shape[0])
+        shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
+        data_samples = data_samples[shuffle_array]
+        data_labels = data_labels[shuffle_array]
+        total_row = data_samples.shape[0]
+        train_row = int(total_row * 0.75)
+        validate_row = int(total_row * 0.125)
+
+        train_data = data_samples[0:train_row, :]
+        validate_data = data_samples[train_row: train_row + validate_row, :]
+        test_data = data_samples[train_row + validate_row:, :]
+        train_labels = data_labels[0: train_row, :]
+        validate_labels = data_labels[train_row: train_row + validate_row, :]
+        test_labels = data_labels[train_row + validate_row:, :]
+        # normalized
+
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
         
     def load_data(self, seq_num):
         # load in_matrix
@@ -220,5 +272,6 @@ class HumanTraffic:
 
 
 if __name__ == "__main__":
-    print("hehe")
+    h = HumanTraffic('../../data/lndata_filter')
+    h.load_unisolate_data(3)
 

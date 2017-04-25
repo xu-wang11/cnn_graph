@@ -84,7 +84,7 @@ def grid_graph(m, corners=False):
     return A
 
 t_start = time.process_time()
-A = grid_graph(32, corners=False)
+A = grid_graph(20, corners=False)
 # A = graph.replace_random_edges(A, 0)
 # graphs, perm = coarsening.coarsen(A, levels=FLAGS.coarsening_levels, self_connections=False)
 L = [graph.laplacian(A, normalized=True)] # [graph.laplacian(A, normalized=True) for A in graphs]
@@ -97,17 +97,17 @@ print('Execution time: {:.2f}s'.format(time.process_time() - t_start))
 
 # experiment init
 # DATA_SET_PATH='../../data/lndata'
-# DATA_SET_PATH='../../data/lndata_filter'
-DATA_SET_PATH='../../data/bjtaxi'
+DATA_SET_PATH='../../data/lndata_filter'
+# DATA_SET_PATH='../../data/bjtaxi'
 # DATA_SET_PATH='../../data/shanxidata'
 seq_num = 3
 t_start = time.process_time()
 ht = humantraffic.HumanTraffic(DATA_SET_PATH)
-train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data_period_trend(seq_num)
-# A1 = A1.astype(np.float32)
+train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_unisolate_data(seq_num)
+A1 = A1.astype(np.float32)
 # A = sparse_matrix_element_wise_max(A, A1)
 # A = A.astype(np.float32)
-# L = [graph.laplacian(A1, normalized=True)] # [graph.laplacian(A, normalized=True) for A in graphs]
+L = [graph.laplacian(A1, normalized=True)] # [graph.laplacian(A, normalized=True) for A in graphs]
 #del A
 train_data_ = np.zeros((train_data.shape[0], train_data.shape[1], train_data.shape[2]))
 print('Execution time: {:.2f}s'.format(time.process_time() - t_start))
@@ -124,7 +124,7 @@ print(train_labels.shape)
 # In[ ]:
 common = {}
 common['dir_name']       = 'mnist/'
-common['num_epochs']     = 50
+common['num_epochs']     = 150
 common['batch_size']     = 100
 common['decay_steps']    = train_data.shape[0] / common['batch_size']
 common['eval_frequency'] = 100
@@ -136,7 +136,7 @@ print(train_data.shape)
 # Common hyper-parameters for networks with one convolutional layer.
 common['regularization'] = 0
 common['dropout']        = 1
-common['learning_rate']  = 0.005
+common['learning_rate']  = 0.02
 common['decay_rate']     = 0.9
 common['momentum']       = 0.9
 common['F']              = [10]
@@ -158,11 +158,11 @@ if True:
     params['dir_name'] += name
     #params['filter'] = 'chebyshev2' # fourier
     params['filter'] = 'fourier'
-    params['_nfilter'] = 64
-    params['_nres_layer_count'] = 4
-    params['_STACK_NUM'] = 3
+    params['_nfilter'] = 32
+    params['_nres_layer_count'] = 3
+    params['_STACK_NUM'] = 1
     params['K'] = [20]
-    params['C_0'] = [seq_num * 2, 2, 2]
+    params['C_0'] = [6]
 
     train_pred, test_pred =  model_perf.test(models.cgcnn(L, **params), name, params,
                     train_data, train_labels, val_data, val_labels, test_data, test_labels)
