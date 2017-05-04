@@ -21,10 +21,10 @@ import math
 # notification
 sys.path.insert(0, '../../')
 
+config = tf.ConfigProto()
+config.gpu_options.allow_growth = True
+session = tf.Session(config=config)
 
-# 配置显存大小
-gpu_options = tf.GPUOptions(per_process_gpu_memory_fraction=0.4)
-sess = tf.Session(config=tf.ConfigProto(gpu_options=gpu_options))
 #config = tf.ConfigProto(
 #         device_count = {'GPU': 0}
 #     )
@@ -103,7 +103,7 @@ DATA_SET_PATH='../../data/lndata_filter'
 seq_num = 3
 t_start = time.process_time()
 ht = humantraffic.HumanTraffic(DATA_SET_PATH)
-train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_unisolate_data(seq_num)
+train_data, val_data, test_data, train_labels, val_labels, test_labels, A1, remove_labels = ht.load_unisolate_data(seq_num)
 A1 = A1.astype(np.float32)
 # A = sparse_matrix_element_wise_max(A, A1)
 # A = A.astype(np.float32)
@@ -159,7 +159,7 @@ if True:
     #params['filter'] = 'chebyshev2' # fourier
     params['filter'] = 'fourier'
     params['_nfilter'] = 32
-    params['_nres_layer_count'] = 3
+    params['_nres_layer_count'] = 4
     params['_STACK_NUM'] = 1
     params['K'] = [20]
     params['C_0'] = [6]
@@ -172,9 +172,11 @@ if True:
     end_time = time.time()
     print("total time {0} elapse...\n".format(end_time - start_time))
     #
+    # remove_train_labels = remove_labels[:, 0:train_labels.shape[]]
     # real_data = np.concatenate(train_labels, test_labels)
     # pred_data = np.concatenate(train_pred, test_pred)
     print(str(math.sqrt(np.sum((train_target - train_pred) ** 2) / (train_pred.shape[0] * train_pred.shape[1] * train_pred.shape[2]))))
+
     print(str(math.sqrt(np.sum((test_target - test_pred) ** 2) / (test_pred.shape[0] * test_pred.shape[1] * test_pred.shape[2]))))
     print('train finish...\n')
     send_notification('cnn_graph finished part 1', 'cnn_grpah')

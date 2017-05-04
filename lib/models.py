@@ -1080,6 +1080,12 @@ class cgcnn(base_model):
                         x = self.filter(x, self.L[0], nfilter, self.K[0])
                     with tf.name_scope('activation'):
                         x = self.activation_function(x, activation)
+                        
+                with tf.variable_scope('sublayer1'):
+                    with tf.name_scope('filter'):
+                        x = self.filter(x, self.L[0], nfilter, self.K[0])
+                    with tf.name_scope('activation'):
+                        x = self.activation_function(x, activation)
         return x
 
 
