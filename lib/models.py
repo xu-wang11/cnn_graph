@@ -116,15 +116,15 @@ class base_model(object):
                 batch_data = batch_data.toarray()  # convert sparse matrices
             feed_dict = {self.ph_data: batch_data, self.ph_labels: batch_labels, self.ph_dropout: self.dropout, self.is_train:True, self.reuse:None}
             query_list = [self.op_train, self.op_loss, self.op_loss_average]
-            # for k,v in self.nets.items():
-            #     query_list.append(v)
+            for k,v in self.nets.items():
+                query_list.append(v)
             x = sess.run(query_list, feed_dict)
             learning_rate, loss, loss_average = x[0], x[1], x[2]  # x = sess.run(query_list, feed_dict)
             parse_result = {}
             i = 1
-            # for k, v in self.nets.items():
-            #     parse_result[k] = x[2 + i]
-            #     i += 1
+            for k, v in self.nets.items():
+                parse_result[k] = x[2 + i]
+                i += 1
 
             # print("come to deu")
             # Periodical evaluation of the model.
@@ -139,6 +139,7 @@ class base_model(object):
                 print('  time: {:.0f}s (wall {:.0f}s)'.format(time.process_time() - t_process, time.time() - t_wall))
 
                 end_time = time.time()
+
                 print("time spend {0}...:\n".format(end_time - start_time))
                 start_time = time.time()
                 # Summaries for TensorBoard.
@@ -172,6 +173,7 @@ class base_model(object):
         """Build the computational graph of the model."""
         self.graph = tf.Graph()
         with self.graph.as_default():
+            tf.set_random_seed(2017)
             # Inputs.
             with tf.name_scope('inputs'):
                 self.is_train = tf.placeholder(tf.bool, name='phase_train')
@@ -824,12 +826,13 @@ class cgcnn(base_model):
     def __init__(self, L, F, K, p, M, _STACK_NUM=1, _nfilter=64, _nres_layer_count=4, filter='chebyshev5', brelu='b1relu', pool='mpool1',
                  num_epochs=20, learning_rate=0.1, decay_rate=0.95, decay_steps=None, momentum=0.9,
                  regularization=0, dropout=0, batch_size=100, eval_frequency=200,
-                 dir_name='', C_0=[6]):
+                 dir_name='', C_0=[6], model_name='ResGNN'):
         super().__init__()
         
         self.nfilter = _nfilter
         self.nres_layer_count = _nres_layer_count
         self.stack_num = _STACK_NUM
+        self.model_name = model_name
         # Verify the consistency w.r.t. the number of layers.
         assert len(L) >= len(F) == len(K) == len(p)
         assert np.all(np.array(p) >= 1)
@@ -1056,7 +1059,7 @@ class cgcnn(base_model):
         return activation_funcs[activation](x)
 
     def residual_layer(self, x, nfilter, activation, name_scope):
-        flag = False
+        flag = self.model_name == 'ResGNN'
         if flag is True:
             x_identity = x
             with tf.variable_scope(name_scope):
@@ -1072,55 +1075,58 @@ class cgcnn(base_model):
                         x = x + x_identity
                     with tf.name_scope('activation2'):
                         x = self.activation_function(x, activation)
+                                                           
 
         else:
             with tf.variable_scope(name_scope):
-                with tf.variable_scope('sublayer0'):
+                with tf.variable_scope('sublayer0nores'):
                     with tf.name_scope('filter'):
                         x = self.filter(x, self.L[0], nfilter, self.K[0])
                     with tf.name_scope('activation'):
                         x = self.activation_function(x, activation)
-                        
-                with tf.variable_scope('sublayer1'):
-                    with tf.name_scope('filter'):
+                with tf.variable_scope('sublayer1nores'):
+                    with tf.name_scope('filter2'):
                         x = self.filter(x, self.L[0], nfilter, self.K[0])
-                    with tf.name_scope('activation'):
+                    with tf.name_scope('activation2'):
                         x = self.activation_function(x, activation)
         return x
 
-
+    # add some comments
     def _inference(self, x, dropout):
         # Graph convolutional layers.
         # x = tf.expand_dims(x, 2)  # N x M x F=1
         if self.stack_num == 1:
             return self.residual_network(x)
         else:
+            print("stack dim")
             # x = tf.expand_dims(x, 3)
             N, M, F = x.get_shape()
             N, M, F = int(N), int(M), int(F)
             x = tf.reshape(x, [N, M, np.sum(self.C_0), 1])
             # x = tf.transpose(x, [0, 1, 3, 2])
             x_arr = tf.unstack(x, axis=2)
-            X_0 = tf.concat(x_arr[0:6], axis=2)
-            X_1 = tf.concat(x_arr[6:8], axis=2)
-            X_2 = tf.concat(x_arr[8:10], axis=2)
-            x_arr = [X_0, X_1, X_2]
+            X_0 = tf.concat(x_arr[0:12], axis=2)
+            X_1 = tf.concat(x_arr[12:16], axis=2)
+            nfilter = self.nfilter
+            x_arr = [X_0, X_1]
             with tf.variable_scope('final_merge'):
                 X = None
                 for i in range(self.stack_num):
                     with tf.variable_scope('VC_{0}'.format(i)):
                         with tf.name_scope('C_{0}'.format(i)):
                             x1 = self.residual_network(x_arr[i])
-                            # x1 = tf.nn.relu(x1)
+                            x1 = tf.nn.relu(x1)
+                            #x1 = self.filter(x_arr[i], self.L[0], nfilter, self.K[0])
                             N, M, F = x1.get_shape()
+                        with tf.variable_scope('W_{0}'.format(i)):
                             w1 = self._weight_variable([M, F])
                         if i == 0:
                             X = x1 * w1
                         else:
                             X = X + x1 * w1
+            # with tf.variable_scope('resnet'):                
+            #    X = self.residual_network(X)
             return X
-
-
 
     def residual_network(self, x):
         nfilter = self.nfilter

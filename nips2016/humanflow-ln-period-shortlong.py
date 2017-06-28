@@ -17,7 +17,7 @@ from tensorflow.python import debug as tf_debug
 import matplotlib.pyplot as plt
 import tensorflow as tf
 import math
-
+np.random.seed(2017) 
 # notification
 sys.path.insert(0, '../../')
 
@@ -55,7 +55,7 @@ from CoreUtils.SendNotification import send_notification
 from CoreUtils import SendNotification
 # SendNotification.http_config = '59.66.107.198'
 SendNotification.http_config = '192.168.34.138'
-print()
+# print()
 
 
 # In[3]:
@@ -102,13 +102,14 @@ print('Execution time: {:.2f}s'.format(time.process_time() - t_start))
 # experiment init
 # DATA_SET_PATH='../../data/lndata'
 DATA_SET_PATH='../../data/lndata_filter'
-# DATA_SET_PATH='../../data/bjtaxi'
+#DATA_SET_PATH='../../data/bjtaxi'
 # DATA_SET_PATH='../../data/shanxidata'
 seq_num = 3
 t_start = time.process_time()
 ht = humantraffic.HumanTraffic(DATA_SET_PATH)
-train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_split_ln_data(seq_num)
-# train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_data(seq_num)
+# train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data(seq_num)
+train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_split_ln_data_period(seq_num)
+# train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_split_ln_data(seq_num)
 # A1 = A1.astype(np.float32)
 # A = sparse_matrix_element_wise_max(A, A1)
 # A = A.astype(np.float32)
@@ -130,7 +131,7 @@ print(train_labels.shape)
 # In[ ]:
 common = {}
 common['dir_name']       = 'mnist/'
-common['num_epochs']     = 150
+common['num_epochs']     = 100
 common['batch_size']     = 100
 common['decay_steps']    = train_data.shape[0] / common['batch_size']
 common['eval_frequency'] = 100
@@ -164,9 +165,10 @@ if True:
     params['dir_name'] += name
     #params['filter'] = 'chebyshev2' # fourier
     params['filter'] = 'fourier'
-    params['_nfilter'] = 32
-    params['_nres_layer_count'] = 2
+    params['_nfilter'] = 64
+    params['_nres_layer_count'] = 4
     params['K'] = [20]
+    params['_STACK_NUM'] = 2
     params['C_0'] = train_data.shape[2]
     params['model_name'] = 'ResGNN'
     # params['model_name'] = 'GNN'
@@ -180,9 +182,11 @@ if True:
     #
     # real_data = np.concatenate(train_labels, test_labels)
     # pred_data = np.concatenate(train_pred, test_pred)
-    print(str(math.sqrt(np.sum((train_target - train_pred) ** 2) / (train_pred.shape[0] * train_pred.shape[1] * train_pred.shape[2]))))
-    print(str(math.sqrt(np.sum((test_target - test_pred) ** 2) / (test_pred.shape[0] * test_pred.shape[1] * test_pred.shape[2]))))
+    s1 = str(math.sqrt(np.sum((train_target - train_pred) ** 2) / (train_pred.shape[0] * train_pred.shape[1] * train_pred.shape[2])))
+    s2 = str(math.sqrt(np.sum((test_target - test_pred) ** 2) / (test_pred.shape[0] * test_pred.shape[1] * test_pred.shape[2])))
+    print (s1 + ' ' + s2)
     print('train finish...\n')
+
     send_notification('cnn_graph finished part 1', 'cnn_grpah')
 
 
@@ -191,7 +195,7 @@ if True:
 # In[ ]:
 
 if True:
-    
+                     
     # sess = tf.Session(config=config)
     start_time = time.time()
     name = 'fgconv_softmax'
@@ -199,10 +203,10 @@ if True:
     params['dir_name'] += name
     #params['filter'] = 'chebyshev2' # fourier
     params['filter'] = 'fourier'
-    params['_nfilter'] = 24
+    params['_nfilter'] = 64
     params['_nres_layer_count'] = 4
     params['K'] = [20]
-    params['C_0'] = seq_num * 2
+    params['C_0'] = seq_num * 2              
     train_pred, test_pred =  model_perf.test(models.cgcnn(L, **params), name, params,
                     train_data, train_labels, val_data, val_labels, test_data, test_labels)
 
