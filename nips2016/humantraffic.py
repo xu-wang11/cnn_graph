@@ -21,8 +21,8 @@ class HumanTraffic:
         self.out_matrix = None
         self.dataset_path = data_set_path
    
-    def load_ln_data_period(self, seq_num):
-        ln_data = loadmat(os.path.join(self.dataset_path, 'ln_data.mat'))
+    def load_ln_data_period(self, seq_num, datafile='ln_data.mat'):
+        ln_data = loadmat(os.path.join(self.dataset_path, datafile))
         edge_matrix = loadmat(os.path.join(self.dataset_path, 'edge_matrix.mat'))['edge_matrix']
         # edge_matrix = edge_matrix.multiply(edge_matrix>=400)
         # edge_matrix.eliminate_zeros()
@@ -30,25 +30,28 @@ class HumanTraffic:
         edge_matrix = csr_matrix(edge_matrix)
         in_matrix = ln_data['inmatrix']
         out_matrix = ln_data['outmatrix']
+        in_matrix = in_matrix[:, 0:1344]
+        out_matrix = out_matrix[:, 0:1344]
         in_matrix, out_matrix = self.normalize(in_matrix, out_matrix)
+        
 
         # train data test data
         data_samples = []
         data_labels = []
-        for i in range(48 - 3, in_matrix.shape[1] - seq_num):
+        for i in range(48 - seq_num, in_matrix.shape[1] - seq_num):
             x1 = np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1)
-            x2 = np.concatenate((in_matrix[:, i+3 - 48: i + 2: 48], out_matrix[:, i + 3 - 48: i + 2: 48]), axis=1)
+            x2 = np.concatenate((in_matrix[:, i+seq_num - 48: i + seq_num - 1: 48], out_matrix[:, i + seq_num - 48: i + seq_num - 1: 48]), axis=1)
             # x3 = np.concatenate((in_matrix[:, i + 3 - (48 * 7): i + 2: 48 * 7], out_matrix[:, i + 3 - 48 * 7: i + 2: 48 * 7]), axis=1)
             data_samples.append(np.concatenate((x1, x2), axis=1))
-            data_labels.append(np.concatenate((in_matrix[:, i + 3:i + 4], out_matrix[:, i + 3:i + 4]), axis=1))
+            data_labels.append(np.concatenate((in_matrix[:, i + seq_num:i + seq_num + 1], out_matrix[:, i + seq_num:i + seq_num + 1]), axis=1))
             # data_labels.append(in_matrix[:, i + seq_num])
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        shuffle_array = np.random.permutation(data_samples.shape[0])
+        # shuffle_array = np.random.permutation(data_samples.shape[0])
         # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
-        data_samples = data_samples[shuffle_array]
-        data_labels = data_labels[shuffle_array]
+        # data_samples = data_samples[shuffle_array]
+        # data_labels = data_labels[shuffle_array]
         total_row = data_samples.shape[0]
         train_row = int(total_row * 0.75)
         validate_row = int(total_row * 0.125)
@@ -84,14 +87,14 @@ class HumanTraffic:
         # train data test data
         data_samples = []
         data_labels = []
-        for i in range(48 - 3, target_in_matrix.shape[1] - seq_num):
+        for i in range(48 - seq_num, target_in_matrix.shape[1] - seq_num):
             x1 = np.concatenate((split_in_matrix[:, i:i+seq_num], split_out_matrix[:, i:i + seq_num]), axis=1)
             x1 = np.reshape(x1, newshape=(x1.shape[0], x1.shape[1] * x1.shape[2]))
-            x2 = np.concatenate((split_in_matrix[:, i+3-48:i+2:48], split_out_matrix[:, i+3-48:i+2:48]), axis=1)
+            x2 = np.concatenate((split_in_matrix[:, i+seq_num-48:i+seq_num - 1:48], split_out_matrix[:, i+seq_num-48:i+seq_num - 1:48]), axis=1)
             x2 = np.reshape(x2, newshape=(x2.shape[0], x2.shape[1] * x2.shape[2]))
             data_samples.append(np.concatenate((x1, x2), axis=1))
             # data_samples.append(x1)
-            data_labels.append(np.concatenate((target_in_matrix[:, i+3:i+4], target_out_matrix[:, i+3:i+4]), axis=1))
+            data_labels.append(np.concatenate((target_in_matrix[:, i+seq_num:i+seq_num + 1], target_out_matrix[:, i+seq_num:i+seq_num + 1]), axis=1))
             # data_labels.append(in_matrix[:, i + seq_num])
         data_samples = np.array(data_samples)
         # data_samples = np.reshape(data_samples, newshape=(data_samples.shape[0], data_samples.shape[1], data_samples.shape[2] * data_samples.shape[3]))
@@ -100,9 +103,9 @@ class HumanTraffic:
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
         # shuffle_array = np.random.permutation(data_samples.shape[0])
         # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
-        shuffle_array = np.random.permutation(data_samples.shape[0])
-        data_samples = data_samples[shuffle_array]
-        data_labels = data_labels[shuffle_array]
+        # shuffle_array = np.random.permutation(data_samples.shape[0])
+        # data_samples = data_samples[shuffle_array]
+        # data_labels = data_labels[shuffle_array]
         total_row = data_samples.shape[0]
         train_row = int(total_row * 0.75)
         validate_row = int(total_row * 0.125)
@@ -117,9 +120,9 @@ class HumanTraffic:
 
         return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
 
-    def load_split_ln_data(self, seq_num):
+    def load_split_ln_data(self, seq_num, datafile='split_lndata_street.mat'):
         # ln_data = loadmat(os.path.join(self.dataset_path, 'split_ln_data_2.mat'))
-        ln_data = loadmat(os.path.join(self.dataset_path, 'split_lndata_street.mat'))
+        ln_data = loadmat(os.path.join(self.dataset_path, datafile))
         edge_matrix = loadmat(os.path.join(self.dataset_path, 'edge_matrix.mat'))['edge_matrix']
         edge_matrix = csr_matrix(edge_matrix)
         # edge_matrix = edge_matrix.multiply(edge_matrix>=400)
@@ -139,11 +142,13 @@ class HumanTraffic:
         # train data test data
         data_samples = []
         data_labels = []
-        for i in range(48 -3, target_in_matrix.shape[1] - seq_num):
-            data_samples.append(np.concatenate((split_in_matrix[:, i:i+seq_num], split_out_matrix[:, i:i + seq_num]), axis=1))
-            data_labels.append(np.concatenate((target_in_matrix[:, i+3:i+4], target_out_matrix[:, i+3:i+4]), axis=1))
+        for i in range(target_in_matrix.shape[1] - seq_num):
+            data_samples.append(np.concatenate((split_in_matrix[:, i:i+seq_num, :], split_out_matrix[:, i:i + seq_num, :]), axis=1))
+            data_labels.append(np.concatenate((target_in_matrix[:, i+seq_num:i+seq_num + 1], target_out_matrix[:, i+seq_num:i+seq_num + 1]), axis=1))
             # data_labels.append(in_matrix[:, i + seq_num])
+        
         data_samples = np.array(data_samples)
+        print(data_samples.shape)
         data_samples = np.reshape(data_samples, newshape=(data_samples.shape[0], data_samples.shape[1], data_samples.shape[2] * data_samples.shape[3]))
         # data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
@@ -185,7 +190,7 @@ class HumanTraffic:
         data_labels = []
         for i in range(in_matrix.shape[1] - seq_num):
             data_samples.append(np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1))
-            data_labels.append(np.concatenate((in_matrix[:, i+3:i+4], out_matrix[:, i+3:i+4]), axis=1))
+            data_labels.append(np.concatenate((in_matrix[:, i+seq_num:i+seq_num + 1], out_matrix[:, i+seq_num:i+seq_num + 1]), axis=1))
             # data_labels.append(in_matrix[:, i + seq_num])
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
@@ -208,6 +213,52 @@ class HumanTraffic:
 
         return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, None
 
+    
+    def load_bj_clus_data(self, seq_num):
+        ln_data = loadmat(os.path.join(self.dataset_path, 'bj_clus.mat')) 
+        edge_matrix = loadmat(os.path.join(self.dataset_path, 'edge_matrix.mat'))['edge_matrix']
+        edge_matrix = csr_matrix(edge_matrix)
+        # edge_matrix = edge_matrix.multiply(edge_matrix>=400)
+        # edge_matrix.eliminate_zeros()
+        # edge_matrix.data = np.log10(edge_matrix.data)
+        in_matrix = ln_data['inmatrix']
+        out_matrix = ln_data['outmatrix']
+        # train data test data
+        data_samples = []
+        in_matrix, out_matrix = self.normalize(in_matrix, out_matrix)
+
+        data_labels = []
+        for i in range(in_matrix.shape[1] - seq_num):
+            x_input = np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1)
+            x_output = np.concatenate((in_matrix[:, i+seq_num:i+seq_num + 1], out_matrix[:, i+seq_num:i+seq_num + 1]), axis=1)
+            nan_num = np.count_nonzero(x_input == -1) + np.count_nonzero(x_output == -1)
+            if nan_num == 0:
+                data_samples.append(x_input)
+                data_labels.append(x_output)
+            # data_labels.append(in_matrix[:, i + seq_num])
+        data_samples = np.array(data_samples)
+        data_labels = np.array(data_labels)
+        print('shape of data_samples: {0}'.format(data_samples.shape[0]))
+        shuffle_array = np.random.permutation(data_samples.shape[0])
+        # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
+        data_samples = data_samples[shuffle_array]
+        data_labels = data_labels[shuffle_array]
+        total_row = data_samples.shape[0]
+        train_row = int(total_row * 0.75)
+        validate_row = int(total_row * 0.125)
+
+        train_data = data_samples[0:train_row, :]
+        validate_data = data_samples[train_row: train_row + validate_row, :]
+        test_data = data_samples[train_row + validate_row:, :]
+        train_labels = data_labels[0: train_row, :]
+        validate_labels = data_labels[train_row: train_row + validate_row, :]
+        test_labels = data_labels[train_row + validate_row:, :]
+        # normalized
+
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
+
+    
+    
     def load_bj_data_period_trend(self, seq_num):
         ln_data = loadmat(os.path.join(self.dataset_path, 'bj_data.mat'))
         # edge_matrix = loadmat(os.path.join(self.dataset_path, 'edge_matrix.mat'))['edge_matrix']
@@ -221,12 +272,12 @@ class HumanTraffic:
         # train data test data
         data_samples = []
         data_labels = []
-        for i in range(48 * 7 - 3, in_matrix.shape[1] - seq_num):
+        for i in range(48 * 7 - seq_num, in_matrix.shape[1] - seq_num):
             x1 = np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1)
-            x2 = np.concatenate((in_matrix[:, i+3 - 48: i + 2: 48], out_matrix[:, i + 3 - 48: i + 2: 48]), axis=1)
-            x3 = np.concatenate((in_matrix[:, i + 3 - (48 * 7): i + 2: 48 * 7], out_matrix[:, i + 3 - 48 * 7: i + 2: 48 * 7]), axis=1)
+            x2 = np.concatenate((in_matrix[:, i+seq_num - 48: i + seq_num - 1: 48], out_matrix[:, i + seq_num - 48: i + seq_num - 1: 48]), axis=1)
+            x3 = np.concatenate((in_matrix[:, i + seq_num - (48 * 7): i + seq_num - 1: 48 * 7], out_matrix[:, i + seq_num - 48 * 7: i + seq_num - 1: 48 * 7]), axis=1)
             data_samples.append(np.concatenate((x1, x2, x3), axis=1))
-            data_labels.append(np.concatenate((in_matrix[:, i + 3:i + 4], out_matrix[:, i + 3:i + 4]), axis=1))
+            data_labels.append(np.concatenate((in_matrix[:, i + seq_num:i + seq_num + 1], out_matrix[:, i + seq_num:i + seq_num + 1]), axis=1))
             # data_labels.append(in_matrix[:, i + seq_num])
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
@@ -249,6 +300,53 @@ class HumanTraffic:
 
         return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, None
 
+    
+    def load_bj_clus_period_trend(self, seq_num):
+        ln_data = loadmat(os.path.join(self.dataset_path, 'bj_clus.mat'))
+        edge_matrix = loadmat(os.path.join(self.dataset_path, 'edge_matrix.mat'))['edge_matrix']
+        edge_matrix = csr_matrix(edge_matrix)
+        # edge_matrix = edge_matrix.multiply(edge_matrix>=400)
+        # edge_matrix.eliminate_zeros()
+        # edge_matrix.data = np.log10(edge_matrix.data)
+        in_matrix = ln_data['inmatrix']
+        out_matrix = ln_data['outmatrix']
+        in_matrix, out_matrix = self.normalize(in_matrix, out_matrix)
+
+        # train data test data
+        data_samples = []
+        data_labels = []
+        for i in range(48 * 2 - seq_num, in_matrix.shape[1] - seq_num):
+            x1 = np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1)
+            x2 = np.concatenate((in_matrix[:, i+seq_num - 96: i + seq_num - 1: 48], out_matrix[:, i + seq_num - 96: i + seq_num - 1: 48]), axis=1)
+            # x3 = np.concatenate((in_matrix[:, i + seq_num - (48 * 7): i + seq_num - 1: 48 * 7], out_matrix[:, i + seq_num - 48 * 7: i + seq_num - 1: 48 * 7]), axis=1)
+            input_data = np.concatenate((x1, x2), axis=1)
+            output_data = np.concatenate((in_matrix[:, i + seq_num:i + seq_num + 1], out_matrix[:, i + seq_num:i + seq_num + 1]), axis=1)
+            nan_num = np.count_nonzero(input_data == -1) + np.count_nonzero(output_data == -1)
+            if nan_num == 0:
+                data_samples.append(input_data)
+                data_labels.append(output_data)
+            # data_labels.append(in_matrix[:, i + seq_num])
+        data_samples = np.array(data_samples)
+        data_labels = np.array(data_labels)
+        print('shape of data_samples: {0}'.format(data_samples.shape[0]))
+        shuffle_array = np.random.permutation(data_samples.shape[0])
+        # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
+        data_samples = data_samples[shuffle_array]
+        data_labels = data_labels[shuffle_array]
+        total_row = data_samples.shape[0]
+        train_row = int(total_row * 0.75)
+        validate_row = int(total_row * 0.125)
+
+        train_data = data_samples[0:train_row, :]
+        validate_data = data_samples[train_row: train_row + validate_row, :]
+        test_data = data_samples[train_row + validate_row:, :]
+        train_labels = data_labels[0: train_row, :]
+        validate_labels = data_labels[train_row: train_row + validate_row, :]
+        test_labels = data_labels[train_row + validate_row:, :]
+        # normalized
+
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
+    
     # only use nodes contains edges
     def load_unisolate_data(self, seq_num):
         ln_data = loadmat(os.path.join(self.dataset_path, 'ln_data.mat'))
@@ -288,10 +386,10 @@ class HumanTraffic:
         remove_labels = []
         for i in range(in_matrix.shape[1] - seq_num):
             data_samples.append(np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1))
-            data_labels.append(np.concatenate((in_matrix[:, i+3:i+4], out_matrix[:, i+3:i+4]), axis=1))
+            data_labels.append(np.concatenate((in_matrix[:, i+seq_num:i+seq_num + 1], out_matrix[:, i+seq_num:i+seq_num + 1]), axis=1))
             # data_labels.append(in_matrix[:, i + seq_num])
         for i in range(remove_in_matrix.shape[1] - seq_num):
-           remove_labels.append(np.concatenate((remove_in_matrix[:, i+3:i+4], remove_out_matrix[:, i+3:i+4]), axis=1))
+           remove_labels.append(np.concatenate((remove_in_matrix[:, i+seq_num:i+seq_num + 1], remove_out_matrix[:, i+seq_num:i+seq_num + 1]), axis=1))
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         remove_labels = np.array(remove_labels)
@@ -388,13 +486,15 @@ class HumanTraffic:
         data_labels = []
         for i in range(in_matrix.shape[1] - seq_num):
             data_samples.append(np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1))
-            data_labels.append(np.concatenate((in_matrix[:, i+3:i+4], out_matrix[:, i+3:i+4]), axis=1))
+            data_labels.append(np.concatenate((in_matrix[:, i+seq_num:i+seq_num + 1], out_matrix[:, i+seq_num:i+seq_num + 1]), axis=1))
             # data_labels.append(in_matrix[:, i + seq_num])
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        # shuffle_array = np.random.permutation(data_samples.shape[0])
-        shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
+        shuffle_array = np.random.permutation(data_samples.shape[0])
+        # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
+        print(shuffle_array)
+        # pickle.dump(shuffle_array, open(os.path.join(self.dataset_path, 'shuffle_array_forzy.pkl'), 'wb'), 2)
         data_samples = data_samples[shuffle_array]
         data_labels = data_labels[shuffle_array]
         total_row = data_samples.shape[0]
@@ -411,8 +511,64 @@ class HumanTraffic:
 
         return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
     
-    def load_lndata_street(self, seq_num):
-        ln_data = loadmat(os.path.join(self.dataset_path, 'split_lndata_street.mat')) 
+    
+    def load_lstm_data(self, seq_num, neighbor_num):
+        ln_data = loadmat(os.path.join(self.dataset_path, 'lndata_street.mat'))
+        edge_matrix = loadmat(os.path.join(self.dataset_path, 'edge_matrix.mat'))['edge_matrix']
+        edge_matrix = edge_matrix + edge_matrix.transpose()
+        # edge_matrix = edge_matrix.todense()
+        tmp_edge_matrix = edge_matrix
+        edge_matrix = np.multiply(np.ones((82, 82)), (edge_matrix>=1))
+        # edge_matrix = edge_matrix + np.eye(400)
+        # print(edge_matrix[1,])
+        
+        # edge_matrix.eliminate_zeros()
+        # edge_matrix.data = np.log10(edge_matrix.data)
+        
+        in_matrix = ln_data['inmatrix']
+        out_matrix = ln_data['outmatrix']
+        in_matrix, out_matrix = self.normalize(in_matrix, out_matrix)
+        
+        data_collection = []
+        for kk in range(in_matrix.shape[0]):
+            #neighbor = np.where(edge_matrix[kk, :] == 1)[1]
+            # if len(neighbor) > 3:
+            #     ss = np.argsort(np.reshape(np.array(tmp_edge_matrix[kk, :]), (tmp_edge_matrix.shape[1],)))
+            #    neighbor = ss[-3:]
+            neighbor = np.array([kk])
+            # train data test data
+            data_samples = []
+            data_labels = []
+            for i in range(in_matrix.shape[1] - seq_num):
+                data_samples.append(np.concatenate((in_matrix[neighbor, i:i+seq_num], out_matrix[neighbor, i:i + seq_num]), axis=0))
+                yy = [in_matrix[kk, i + seq_num], out_matrix[kk, i + seq_num]]
+                data_labels.append(yy)
+                # data_labels.append(in_matrix[:, i + seq_num])
+            data_samples = np.array(data_samples)
+            data_labels = np.array(data_labels)
+            print('shape of data_samples: {0}'.format(data_samples.shape[0]))
+            shuffle_array = np.random.permutation(data_samples.shape[0])
+            # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
+            data_samples = data_samples[shuffle_array]
+            data_labels = data_labels[shuffle_array]
+            total_row = data_samples.shape[0]
+            train_row = int(total_row * 0.8)
+            validate_row = 0
+
+            train_data = data_samples[0:train_row, :]
+            # validate_data = data_samples[train_row: train_row + validate_row, :]
+            test_data = data_samples[train_row + validate_row:, :]
+            train_labels = data_labels[0: train_row, :]
+            # validate_labels = data_labels[train_row: train_row + validate_row, :]
+            test_labels = data_labels[train_row + validate_row:, :]
+            data_collection.append({'train_data':train_data, 'test_data':test_data, 'train_labels': train_labels, 'test_labels': test_labels})
+            
+        # normalized
+        edge_matrix = csr_matrix(edge_matrix)
+        return data_collection, edge_matrix
+    
+    def load_lndata_street(self, seq_num, datafile='lndata_street.mat'):
+        ln_data = loadmat(os.path.join(self.dataset_path, datafile)) 
         edge_matrix = loadmat(os.path.join(self.dataset_path, 'edge_matrix.mat'))['edge_matrix']
         # edge_matrix = edge_matrix + edge_matrix.transpose()
         # edge_matrix = edge_matrix.todense()
@@ -432,7 +588,7 @@ class HumanTraffic:
         data_labels = []
         for i in range(in_matrix.shape[1] - seq_num):
             data_samples.append(np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1))
-            data_labels.append(np.concatenate((in_matrix[:, i+3:i+4], out_matrix[:, i+3:i+4]), axis=1))
+            data_labels.append(np.concatenate((in_matrix[:, i+seq_num:i+seq_num + 1], out_matrix[:, i+seq_num:i+seq_num + 1]), axis=1))
             # data_labels.append(in_matrix[:, i + seq_num])
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
