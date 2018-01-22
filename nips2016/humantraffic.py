@@ -259,7 +259,7 @@ class HumanTraffic:
 
     
     
-    def load_bj_data_period_trend(self, seq_num):
+    def load_bj_data_period_trend(self, seq_num, seq_num_period=1, seq_num_trend=1):
         ln_data = loadmat(os.path.join(self.dataset_path, 'bj_data.mat'))
         # edge_matrix = loadmat(os.path.join(self.dataset_path, 'edge_matrix.mat'))['edge_matrix']
         # edge_matrix = edge_matrix.multiply(edge_matrix>=400)
@@ -272,10 +272,13 @@ class HumanTraffic:
         # train data test data
         data_samples = []
         data_labels = []
-        for i in range(48 * 7 - seq_num, in_matrix.shape[1] - seq_num):
+        for i in range((48 * 7 - seq_num) + int(seq_num_trend / 2), in_matrix.shape[1] - seq_num):
             x1 = np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1)
-            x2 = np.concatenate((in_matrix[:, i+seq_num - 48: i + seq_num - 1: 48], out_matrix[:, i + seq_num - 48: i + seq_num - 1: 48]), axis=1)
-            x3 = np.concatenate((in_matrix[:, i + seq_num - (48 * 7): i + seq_num - 1: 48 * 7], out_matrix[:, i + seq_num - 48 * 7: i + seq_num - 1: 48 * 7]), axis=1)
+            x2 = np.concatenate((in_matrix[:, (i + seq_num - 48) - int(seq_num_period / 2): (i + seq_num - 48) + int(seq_num_period / 2) + (seq_num_period % 2)], out_matrix[:, (i + seq_num - 48) - int(seq_num_period / 2): (i + seq_num - 48) + int(seq_num_period / 2) + (seq_num_period % 2)]), axis=1)
+            x3 = np.concatenate((in_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)], out_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)]), axis=1)
+            print(x1.shape)
+            print(x2.shape)
+            print(x3.shape)
             data_samples.append(np.concatenate((x1, x2, x3), axis=1))
             data_labels.append(np.concatenate((in_matrix[:, i + seq_num:i + seq_num + 1], out_matrix[:, i + seq_num:i + seq_num + 1]), axis=1))
             # data_labels.append(in_matrix[:, i + seq_num])
@@ -297,7 +300,6 @@ class HumanTraffic:
         validate_labels = data_labels[train_row: train_row + validate_row, :]
         test_labels = data_labels[train_row + validate_row:, :]
         # normalized
-
         return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, None
 
     
