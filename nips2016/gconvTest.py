@@ -90,13 +90,17 @@ filter_choice = ['cheby_conv', 'fourier_conv']  # filter
 seq_num_closeness_choice = [3]  #seq_num
 seq_num_period_choice = [3]  #seq_num
 seq_num_trend_choice = [3]  #seq_num
-learning_rate_choice = [0.01]  # learning_rate
+learning_rate_choice = [0.02]  # learning_rate
 filter_num_choice = [32]  # filter_num
 kernel_num_choice = [2]  # kernel_num
 layer_count_choice = [4] # layer count
+lstm_layer_count_choice = [3]
 filter_choice = ['fourier_conv']  # filter
 
-for params_instance in itertools.product(seq_num_closeness_choice, seq_num_period_choice, seq_num_trend_choice, learning_rate_choice, filter_num_choice, kernel_num_choice, layer_count_choice, filter_choice):
+infer_methods = ['inference_lstm', 'inference_glstm', 'inference_gconv', 'inference_gconv_period_no_expand', 'inference_glstm_gconv', 'inference_glstm_period_expand', 
+                'inference_glstm_period_expand_gconv1', 'inference_glstm_period_expand_gconv2']
+
+for params_instance in itertools.product(seq_num_closeness_choice, seq_num_period_choice, seq_num_trend_choice, learning_rate_choice, filter_num_choice, kernel_num_choice, layer_count_choice, filter_choice, lstm_layer_count_choice):
     print(params_instance)
     try:
         # sess = tf.Session(config=config)
@@ -107,7 +111,7 @@ for params_instance in itertools.product(seq_num_closeness_choice, seq_num_perio
         seq_num_trend = params_instance[2]
         ht = humantraffic.HumanTraffic(DATA_SET_PATH)
 
-        # train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data(seq_num)
+        #train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data(seq_num_closeness)
         train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data_period_trend(seq_num_closeness, seq_num_period, seq_num_trend)
         print('here')
         train_data_ = np.zeros((train_data.shape[0], train_data.shape[1], train_data.shape[2]))
@@ -117,7 +121,7 @@ for params_instance in itertools.product(seq_num_closeness_choice, seq_num_perio
         name = 'fgconv_softmax'
 
         params = {}
-        params['num_epochs'] = 10
+        params['num_epochs'] = 15
         params['batch_size'] = 50
         params['decay_steps'] = train_data.shape[0] / params['batch_size']
         params['eval_frequency'] = 100
@@ -135,6 +139,8 @@ for params_instance in itertools.product(seq_num_closeness_choice, seq_num_perio
         params['seq_num_closeness'] = seq_num_closeness
         params['seq_num_period'] = seq_num_period
         params['seq_num_trend'] = seq_num_trend
+        params['infer_func'] = 'inference_gconv_period_no_expand'
+        params['lstm_layer_count'] = params_instance[8]
         model = gconv_lstm.GconvModel(L, **params)
         # params['model_name'] = 'GNN'
         train_pred, test_pred = model_perf.test(model, name, params,
