@@ -309,7 +309,7 @@ class GconvModel(GraphModel):
             with tf.variable_scope('output_layer'):
                 x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num,
                                              self.kernel_num)
-        x = self.activation_function(x, 'tanh')
+        # x = self.activation_function(x, 'tanh')
         return x
 
     def inference_gconv_period_no_expand(self, x):
@@ -317,18 +317,57 @@ class GconvModel(GraphModel):
             with tf.variable_scope('conv_init'):
                 x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.num_hidden, self.kernel_num)
                 self.nets[x.name] = x
-                x = self.activation_function(x, 'tanh')
+                x = self.activation_function(x, 'relu')
                 self.nets[x.name] = x
         with tf.name_scope('conv_layers'):
             for i in range(self.conv_layer_num):
                 with tf.variable_scope('conv_layer_{}'.format(i)):
-                    x = self.residual_layer(x, self.num_hidden, 'tanh', 'residual_layer_{0}'.format(i))
+                    x = self.residual_layer(x, self.num_hidden, 'relu', 'residual_layer_{0}'.format(i))
                     self.nets[x.name] = x
         with tf.name_scope('output_layer'):
             with tf.variable_scope('output_layer'):
                 x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num,
                                              self.kernel_num)
-        x = self.activation_function(x, 'tanh')
+        # x = self.activation_function(x, 'relu')
+        return x
+
+    def inference_gconv_period_expand(self, x):
+        batch_size, node_num, feature_in = x.get_shape().as_list()
+        x = tf.reshape(x, [batch_size, node_num, feature_in, 1])
+        # x = tf.transpose(x, [0, 1, 3, 2])
+        x_arr = tf.unstack(x, axis=2)
+        x_0 = tf.concat(x_arr[0:self.num_time_steps_closeness * 2], axis=2)
+        x_1 = tf.concat(x_arr[self.num_time_steps_closeness * 2: (self.num_time_steps_closeness + self.num_time_steps_period) * 2], axis=2)
+        x_2 = tf.concat(x_arr[(self.num_time_steps_closeness + self.num_time_steps_period) * 2: (self.num_time_steps_closeness + self.num_time_steps_period + self.num_time_steps_trend) * 2], axis=2)
+        x_arr = [x_0, x_1, x_2]
+        output_arr = []
+        for j in range(3):
+            x = x_arr[j]
+            with tf.name_scope('conv_init'):
+                with tf.variable_scope('conv_init_{}'.format(j)):
+                    x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.num_hidden, self.kernel_num)
+                    self.nets[x.name] = x
+                    x = self.activation_function(x, 'tanh')
+                    self.nets[x.name] = x
+            with tf.name_scope('conv_layers'):
+                for i in range(self.conv_layer_num):
+                    with tf.variable_scope('conv_layer_{0}_{1}'.format(i, j)):
+                        x = self.residual_layer(x, self.num_hidden, 'relu', 'residual_layer_{0}'.format(i))
+                        self.nets[x.name] = x
+            with tf.name_scope('output_layer'):
+                with tf.variable_scope('output_layer_{}'.format(j)):
+                    x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num,
+                                                 self.kernel_num)
+
+            x = self.activation_function(x, 'relu')
+            output_arr.append(x)
+        x = tf.concat(output_arr, axis=2)
+        with tf.name_scope('merge_layer'):
+            with tf.variable_scope('merge_layer'):
+                x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num,
+                                             self.kernel_num)
+
+        # x = self.activation_function(x, 'tanh')
         return x
 
     def inference_glstm_gconv(self, x):
@@ -336,18 +375,20 @@ class GconvModel(GraphModel):
         x = tf.reshape(x, [int(A), int(B), self.num_time_steps_closeness, 2])
         x = tf.transpose(x, [0, 1, 3, 2])
         x = tf.unstack(x, self.num_time_steps_closeness, 3)
-        lstm_output = self.glstm_layer(x, num_time_steps_closeness, self.lstm_layer_count)
+        lstm_output = self.glstm_layer(x, self.num_time_steps_closeness, self.lstm_layer_count)
             # Check the tf version here
         lstm_output = lstm_output[-1]  # tf.stack(outputs, axis=3)
         x = lstm_output
         with tf.name_scope('conv_layers'):
             for i in range(self.conv_layer_num):
-                x = self.residual_layer(x, self.num_hidden, 'tanh', 'residual_layer_{0}'.format(i))
-                self.nets[x.name] = x
+                with tf.variable_scope('conv_layer_{}'.format(i)):
+                    x = self.residual_layer(x, self.num_hidden, 'relu', 'residual_layer_{0}'.format(i))
+                    self.nets[x.name] = x
         with tf.name_scope('output_layer'):
-            x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num,
+            with tf.variable_scope('output_layer'):
+                x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num,
                                              self.kernel_num)
-        x = self.activation_function(x, 'tanh')
+        # x = self.activation_function(x, 'tanh')
         return x
 
     def inference_glstm_period_expand(self, x):
@@ -360,21 +401,28 @@ class GconvModel(GraphModel):
         X_2 = tf.concat(x_arr[(self.num_time_steps_closeness + self.num_time_steps_period) * 2: (self.num_time_steps_closeness + self.num_time_steps_period + self.num_time_steps_trend) * 2], axis=2)
         x_arr = [X_0, X_1, X_2]
         num_time_steps = [self.num_time_steps_closeness, self.num_time_steps_period, self.num_time_steps_trend]
-        with tf.variable_scope('final_merge'):
-            X = None
-            for i in range(3):
-                outputs = self.glstm_layer(x_arr[i], num_time_steps[i], self.lstm_layer_count)
+
+        X = None
+        for i in range(3):
+            with tf.variable_scope('merge_{}'.format(i)):
+                x = x_arr[i]
+                batch_size, node_num, feature_in = x.get_shape().as_list()
+                x = tf.reshape(x, [batch_size, node_num, num_time_steps[i],
+                                   int(feature_in / num_time_steps[i])])
+                x = tf.transpose(x, [0, 1, 3, 2])
+                x = tf.unstack(x, num_time_steps[i], 3)
+                outputs = self.glstm_layer(x, num_time_steps[i], self.lstm_layer_count)
                 x = outputs[-1]
                 x = self.fc_layer(x, self.out_feature_num)
-                batch_size, node_num, feature_out = x.get_shape().as_list() 
+                batch_size, node_num, feature_out = x.get_shape().as_list()
                 with tf.variable_scope('weight_{}'.format(i)):
                     w = self._weight_variable([node_num, feature_out])
                 if i == 0:
-                    X = x * w1
+                    X = x * w
                 else:
-                    X = X + x * w1
-            x = X
-        x = self.activation_function(x, 'tanh')
+                    X = X + x * w
+        x = X
+        # x = self.activation_function(x, 'tanh')
         return x
 
     def inference_glstm_period_expand_gconv1(self, x):
@@ -388,21 +436,28 @@ class GconvModel(GraphModel):
         X_2 = tf.concat(x_arr[(self.num_time_steps_closeness + self.num_time_steps_period) * 2: (self.num_time_steps_closeness + self.num_time_steps_period + self.num_time_steps_trend) * 2], axis=2)
         x_arr = [X_0, X_1, X_2]
         num_time_steps = [self.num_time_steps_closeness, self.num_time_steps_period, self.num_time_steps_trend]
-        with tf.variable_scope('final_merge'):
-            X = None
-            for i in range(3):
-                outputs = self.glstm_layer(x_arr[i], num_time_steps[i], self.lstm_layer_count)
+
+        X = None
+        for i in range(3):
+            with tf.variable_scope('merge_{}'.format(i)):
+                x = x_arr[i]
+                batch_size, node_num, feature_in = x.get_shape().as_list()
+                x = tf.reshape(x, [batch_size, node_num, num_time_steps[i],
+                                   int(feature_in / num_time_steps[i])])
+                x = tf.transpose(x, [0, 1, 3, 2])
+                x = tf.unstack(x, num_time_steps[i], 3)
+                outputs = self.glstm_layer(x, num_time_steps[i], self.lstm_layer_count)
                 x = outputs[-1]
                 x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num, self.kernel_num)
-                batch_size, node_num, feature_out = x.get_shape().as_list() 
+                batch_size, node_num, feature_out = x.get_shape().as_list()
                 with tf.variable_scope('weight_{}'.format(i)):
                     w = self._weight_variable([node_num, feature_out])
                 if i == 0:
                     X = x * w
                 else:
                     X = X + x * w
-            x = X
-        x = self.activation_function(x, 'tanh')
+        x = X
+        # x = self.activation_function(x, 'tanh')
         return x
 
     def inference_glstm_period_expand_gconv2(self, x):
@@ -416,20 +471,69 @@ class GconvModel(GraphModel):
         X_2 = tf.concat(x_arr[(self.num_time_steps_closeness + self.num_time_steps_period) * 2: (self.num_time_steps_closeness + self.num_time_steps_period + self.num_time_steps_trend) * 2], axis=2)
         x_arr = [X_0, X_1, X_2]
         num_time_steps = [self.num_time_steps_closeness, self.num_time_steps_period, self.num_time_steps_trend]
-        with tf.variable_scope('final_merge'):
-            X = None
-            output_arr = []
-            for i in range(3):
-                outputs = self.glstm_layer(x_arr[i], num_time_steps[i], self.lstm_layer_count)
+        X = None
+        output_arr = []
+        for i in range(3):
+            with tf.variable_scope('merge_{}'.format(i)):
+                x = x_arr[i]
+                batch_size, node_num, feature_in = x.get_shape().as_list()
+                x = tf.reshape(x, [batch_size, node_num, num_time_steps[i],
+                                   int(feature_in / num_time_steps[i])])
+                x = tf.transpose(x, [0, 1, 3, 2])
+                x = tf.unstack(x, num_time_steps[i], 3)
+                outputs = self.glstm_layer(x, num_time_steps[i], self.lstm_layer_count)
                 x = outputs[-1]
                 x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num, self.kernel_num)
                 output_arr.append(x)
-            x = tf.concat(output_arr, axis=2)
+        x = tf.concat(output_arr, axis=2)
+        with tf.variable_scope('final'):
             x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num, self.kernel_num)
-        x = self.activation_function(x, 'tanh')
+        # x = self.activation_function(x, 'tanh')
         return x
 
+    def inference_glstm_period_expand_gconv3(self, x):
+        N, M, F = x.get_shape()
+        N, M, F = int(N), int(M), int(F)
+        x = tf.reshape(x, [N, M, F, 1])
+        # x = tf.transpose(x, [0, 1, 3, 2])
+        x_arr = tf.unstack(x, axis=2)
+        X_0 = tf.concat(x_arr[0:self.num_time_steps_closeness * 2], axis=2)
+        X_1 = tf.concat(x_arr[self.num_time_steps_closeness * 2: (self.num_time_steps_closeness + self.num_time_steps_period) * 2], axis=2)
+        X_2 = tf.concat(x_arr[(self.num_time_steps_closeness + self.num_time_steps_period) * 2: (self.num_time_steps_closeness + self.num_time_steps_period + self.num_time_steps_trend) * 2], axis=2)
+        x_arr = [X_0, X_1, X_2]
+        num_time_steps = [self.num_time_steps_closeness, self.num_time_steps_period, self.num_time_steps_trend]
+        X = None
+        output_arr = []
+        for i in range(3):
+            with tf.variable_scope('merge_{}'.format(i)):
+                x = x_arr[i]
+                batch_size, node_num, feature_in = x.get_shape().as_list()
+                x = tf.reshape(x, [batch_size, node_num, num_time_steps[i],
+                                   int(feature_in / num_time_steps[i])])
+                x = tf.transpose(x, [0, 1, 3, 2])
+                x = tf.unstack(x, num_time_steps[i], 3)
+                outputs = self.glstm_layer(x, num_time_steps[i], self.lstm_layer_count)
+                x = outputs[-1]
+                x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num, self.kernel_num)
+                output_arr.append(x)
+        x = tf.concat(output_arr, axis=2)
 
+        with tf.name_scope('conv_init'):
+            with tf.variable_scope('conv_init'):
+                x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.num_hidden, self.kernel_num)
+                self.nets[x.name] = x
+                x = self.activation_function(x, 'relu')
+                self.nets[x.name] = x
+        with tf.name_scope('conv_layers'):
+            for i in range(self.conv_layer_num):
+                with tf.variable_scope('conv_layer_{}'.format(i)):
+                    x = self.residual_layer(x, self.num_hidden, 'relu', 'residual_layer_{0}'.format(i))
+                    self.nets[x.name] = x
+        with tf.name_scope('output_layer'):
+            with tf.variable_scope('output_layer'):
+                x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num,
+                                             self.kernel_num)
+        return x
 
     def glstm_layer(self, x, num_time_step, layer_count):
         with tf.name_scope("gconv_lstm_layer"):
@@ -462,7 +566,7 @@ class GconvModel(GraphModel):
         return x
 
     def activation_function(self, x, activation):
-        activation_funcs = {'tanh': lambda x: tf.nn.tanh(x)}
+        activation_funcs = {'tanh': lambda x: tf.nn.tanh(x), 'relu': lambda x: tf.nn.relu(x)}
         return activation_funcs[activation](x)
 
     def residual_layer(self, x, nfilter, activation, name_scope):

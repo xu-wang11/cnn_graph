@@ -80,39 +80,44 @@ def grid_graph(m, corners=False):
 A = grid_graph(32, corners=False)
 L = graph.laplacian(A, normalized=True)  # [graph.laplacian(A, normalized=True) for A in graphs]
 
-seq_num_choice = [3, 5, 7, 9]  #seq_num
-learning_rate_choice = [0.003, 0.01, 0.03]  # learning_rate
-filter_num_choice = [8, 16, 32, 48]  # filter_num
-kernel_num_choice = [1, 2, 3, 4, 5]  # kernel_num
-layer_count_choice = [1, 2, 4, 6]  # layer count
-filter_choice = ['cheby_conv', 'fourier_conv']  # filter
-
-seq_num_closeness_choice = [3]  #seq_num
+seq_num_closeness_choice = [3, 4, 5]  #seq_num
 seq_num_period_choice = [3]  #seq_num
 seq_num_trend_choice = [3]  #seq_num
-learning_rate_choice = [0.02]  # learning_rate
+learning_rate_choice = [0.005, 0.01, 0.03]  # learning_rate
 filter_num_choice = [32]  # filter_num
 kernel_num_choice = [2]  # kernel_num
-layer_count_choice = [4] # layer count
-lstm_layer_count_choice = [3]
+layer_count_choice = [1, 2, 3, 4] # layer count
+lstm_layer_count_choice = [1, 2]
 filter_choice = ['fourier_conv']  # filter
+infer_methods = ['inference_glstm', 'inference_gconv', 'inference_gconv_period_no_expand', 'inference_gconv_period_expand', 'inference_glstm_gconv', 'inference_glstm_period_expand',
+                'inference_glstm_period_expand_gconv1', 'inference_glstm_period_expand_gconv2', 'inference_glstm_period_expand_gconv3']
 
-infer_methods = ['inference_lstm', 'inference_glstm', 'inference_gconv', 'inference_gconv_period_no_expand', 'inference_glstm_gconv', 'inference_glstm_period_expand', 
-                'inference_glstm_period_expand_gconv1', 'inference_glstm_period_expand_gconv2']
 
-for params_instance in itertools.product(seq_num_closeness_choice, seq_num_period_choice, seq_num_trend_choice, learning_rate_choice, filter_num_choice, kernel_num_choice, layer_count_choice, filter_choice, lstm_layer_count_choice):
+# seq_num_closeness_choice = [5]  #seq_num
+# seq_num_period_choice = [3]  #seq_num
+# seq_num_trend_choice = [3]  #seq_num
+# learning_rate_choice = [0.03]  # learning_rate
+# filter_num_choice = [32]  # filter_num
+# kernel_num_choice = [2]  # kernel_num
+# layer_count_choice = [4] # layer count
+# lstm_layer_count_choice = [3]
+# filter_choice = ['fourier_conv']  # filter
+# infer_methods = ['inference_glstm_period_expand_gconv3']
+
+for params_instance in itertools.product(seq_num_closeness_choice, seq_num_period_choice, seq_num_trend_choice, learning_rate_choice, filter_num_choice, kernel_num_choice, layer_count_choice, filter_choice, lstm_layer_count_choice, infer_methods):
     print(params_instance)
     try:
         # sess = tf.Session(config=config)
         DATA_SET_PATH = '../../data/bjtaxi'
 
         seq_num_closeness = params_instance[0]
-        seq_num_period = params_instance[1]
-        seq_num_trend = params_instance[2]
+        seq_num_period = seq_num_closeness  # params_instance[1]
+        seq_num_trend = seq_num_closeness  # params_instance[2]
         ht = humantraffic.HumanTraffic(DATA_SET_PATH)
-
-        #train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data(seq_num_closeness)
-        train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data_period_trend(seq_num_closeness, seq_num_period, seq_num_trend)
+        if "expand" in params_instance[9]:
+            train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data_period_trend(seq_num_closeness, seq_num_period, seq_num_trend)
+        else:
+            train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data(seq_num_closeness)
         print('here')
         train_data_ = np.zeros((train_data.shape[0], train_data.shape[1], train_data.shape[2]))
         print('train_data shape: ', train_data.shape)
@@ -121,8 +126,8 @@ for params_instance in itertools.product(seq_num_closeness_choice, seq_num_perio
         name = 'fgconv_softmax'
 
         params = {}
-        params['num_epochs'] = 15
-        params['batch_size'] = 50
+        params['num_epochs'] = 20
+        params['batch_size'] = 100
         params['decay_steps'] = train_data.shape[0] / params['batch_size']
         params['eval_frequency'] = 100
         params['filter'] = params_instance[7]
@@ -139,7 +144,7 @@ for params_instance in itertools.product(seq_num_closeness_choice, seq_num_perio
         params['seq_num_closeness'] = seq_num_closeness
         params['seq_num_period'] = seq_num_period
         params['seq_num_trend'] = seq_num_trend
-        params['infer_func'] = 'inference_gconv_period_no_expand'
+        params['infer_func'] = params_instance[9] # 'inference_glstm_period_expand_gconv2'
         params['lstm_layer_count'] = params_instance[8]
         model = gconv_lstm.GconvModel(L, **params)
         # params['model_name'] = 'GNN'
