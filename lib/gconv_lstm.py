@@ -258,7 +258,7 @@ class GconvModel(GraphModel):
         self.build_graph(self.node_num, np.sum(self.feature_num), self.out_feature_num)
 
     def to_string(self):
-        str = '|{0}| {1}| {2}| {3}| {4}| {5}| {6}| {7}| {8}'.format(self.feature_num, self.batch_size, self.in_feature_num, self.num_time_steps_closeness, self.num_hidden, self.kernel_num, self.learning_rate, self.filter, self.conv_layer_num)
+        str = '|{0}| {1}| {2}| {3}| {4}| {5}| {6}| {7}| {8}| {9}'.format(self.feature_num, self.batch_size, self.in_feature_num, self.num_time_steps_closeness, self.num_hidden, self.kernel_num, self.learning_rate, self.filter, self.conv_layer_num, self.infer_func)
         return str
 
     def _inference(self, x, dropout):
@@ -514,7 +514,7 @@ class GconvModel(GraphModel):
                 x = tf.unstack(x, num_time_steps[i], 3)
                 outputs = self.glstm_layer(x, num_time_steps[i], self.lstm_layer_count)
                 x = outputs[-1]
-                x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num, self.kernel_num)
+                # x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num, self.kernel_num)
                 output_arr.append(x)
         x = tf.concat(output_arr, axis=2)
 

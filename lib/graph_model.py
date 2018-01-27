@@ -290,7 +290,7 @@ class GraphModel(object):
             optimizer = tf.train.AdamOptimizer(learning_rate)
             # optimizer = tf.train.AdagradOptimizer(learning_rate)
             # optimizer = tf.train.AdadeltaOptimizer(learning_rate)
-            grads = optimizer.compute_gradients(loss)
+            grads = optimizer.compute_gradients(loss, aggregation_method=2)
             # self.nets[grads.name] = grads
             op_gradients = optimizer.apply_gradients(grads, global_step=global_step)
 

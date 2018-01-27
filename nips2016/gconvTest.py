@@ -8,14 +8,12 @@ import sys, os
 
 sys.path.insert(0, '..')
 sys.path.insert(0, '/home/csi/Git/HumanFlowPrediction/cnn_graph/lib/')
-from lib import graph, coarsening, utils, gconv_lstm
+from lib import graph, utils, gconv_lstm
 
 import numpy as np
 import time
 from nips2016 import humantraffic
-from tensorflow.python import debug as tf_debug
 # get_ipython().magic('matplotlib inline')
-import matplotlib.pyplot as plt
 import tensorflow as tf
 import math
 import itertools
@@ -83,41 +81,49 @@ L = graph.laplacian(A, normalized=True)  # [graph.laplacian(A, normalized=True) 
 seq_num_closeness_choice = [3, 4, 5]  #seq_num
 seq_num_period_choice = [3]  #seq_num
 seq_num_trend_choice = [3]  #seq_num
-learning_rate_choice = [0.005, 0.01, 0.03]  # learning_rate
+learning_rate_choice = [0.005, 0.01, 0.02, 0.03, 0.04, 0.05]  # learning_rate
 filter_num_choice = [32]  # filter_num
 kernel_num_choice = [2]  # kernel_num
-layer_count_choice = [1, 2, 3, 4] # layer count
+layer_count_choice = [2, 4]  # layer count
 lstm_layer_count_choice = [1, 2]
 filter_choice = ['fourier_conv']  # filter
-infer_methods = ['inference_glstm', 'inference_gconv', 'inference_gconv_period_no_expand', 'inference_gconv_period_expand', 'inference_glstm_gconv', 'inference_glstm_period_expand',
-                'inference_glstm_period_expand_gconv1', 'inference_glstm_period_expand_gconv2', 'inference_glstm_period_expand_gconv3']
 
+infer_methods = ['inference_glstm', 'inference_gconv', 'inference_gconv_period_no_expand',
+'inference_gconv_period_expand', 'inference_glstm_gconv', 'inference_glstm_period_expand',
+'inference_glstm_period_expand_gconv1', 'inference_glstm_period_expand_gconv2',
+'inference_glstm_period_expand_gconv3']
 
+# infer_methods = ['inference_glstm_period_expand_gconv3']
 # seq_num_closeness_choice = [5]  #seq_num
 # seq_num_period_choice = [3]  #seq_num
 # seq_num_trend_choice = [3]  #seq_num
-# learning_rate_choice = [0.03]  # learning_rate
-# filter_num_choice = [32]  # filter_num
+# learning_rate_choice = [0.02]  # learning_rate
+# filter_num_choice = [64]  # filter_num
 # kernel_num_choice = [2]  # kernel_num
 # layer_count_choice = [4] # layer count
 # lstm_layer_count_choice = [3]
 # filter_choice = ['fourier_conv']  # filter
-# infer_methods = ['inference_glstm_period_expand_gconv3']
+# infer_methods = ['inference_gconv']
 
 for params_instance in itertools.product(seq_num_closeness_choice, seq_num_period_choice, seq_num_trend_choice, learning_rate_choice, filter_num_choice, kernel_num_choice, layer_count_choice, filter_choice, lstm_layer_count_choice, infer_methods):
     print(params_instance)
     try:
         # sess = tf.Session(config=config)
-        DATA_SET_PATH = '../../data/bjtaxi'
-
+        DATA_SET_PATH = '../../data/lndata_street6'
         seq_num_closeness = params_instance[0]
         seq_num_period = seq_num_closeness  # params_instance[1]
         seq_num_trend = seq_num_closeness  # params_instance[2]
         ht = humantraffic.HumanTraffic(DATA_SET_PATH)
         if "expand" in params_instance[9]:
-            train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data_period_trend(seq_num_closeness, seq_num_period, seq_num_trend)
+            # train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data_period_trend(seq_num_closeness, seq_num_period, seq_num_trend)
+            train_data, val_data, test_data, train_labels, val_labels, test_labels, A = ht.load_ln_data_period(seq_num_closeness, seq_num_period, seq_num_trend, datafile='split_lndata_street.mat')
+            A = A.astype(np.float32)
+            L = graph.laplacian(A, normalized=True)
         else:
-            train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data(seq_num_closeness)
+            # train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data(seq_num_closeness)
+            train_data, val_data, test_data, train_labels, val_labels, test_labels, A = ht.load_lndata_street(seq_num_closeness, datafile='split_lndata_street.mat')
+            A = A.astype(np.float32)
+            L = graph.laplacian(A, normalized=True)
         print('here')
         train_data_ = np.zeros((train_data.shape[0], train_data.shape[1], train_data.shape[2]))
         print('train_data shape: ', train_data.shape)
@@ -126,7 +132,7 @@ for params_instance in itertools.product(seq_num_closeness_choice, seq_num_perio
         name = 'fgconv_softmax'
 
         params = {}
-        params['num_epochs'] = 20
+        params['num_epochs'] = 200
         params['batch_size'] = 100
         params['decay_steps'] = train_data.shape[0] / params['batch_size']
         params['eval_frequency'] = 100
@@ -144,7 +150,7 @@ for params_instance in itertools.product(seq_num_closeness_choice, seq_num_perio
         params['seq_num_closeness'] = seq_num_closeness
         params['seq_num_period'] = seq_num_period
         params['seq_num_trend'] = seq_num_trend
-        params['infer_func'] = params_instance[9] # 'inference_glstm_period_expand_gconv2'
+        params['infer_func'] = params_instance[9]  # 'inference_glstm_period_expand_gconv2'
         params['lstm_layer_count'] = params_instance[8]
         model = gconv_lstm.GconvModel(L, **params)
         # params['model_name'] = 'GNN'

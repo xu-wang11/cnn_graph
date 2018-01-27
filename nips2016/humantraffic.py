@@ -21,7 +21,7 @@ class HumanTraffic:
         self.out_matrix = None
         self.dataset_path = data_set_path
    
-    def load_ln_data_period(self, seq_num, datafile='ln_data.mat'):
+    def load_ln_data_period(self, seq_num, seq_num_period=1, seq_num_trend=1, datafile='ln_data.mat'):
         ln_data = loadmat(os.path.join(self.dataset_path, datafile))
         edge_matrix = loadmat(os.path.join(self.dataset_path, 'edge_matrix.mat'))['edge_matrix']
         # edge_matrix = edge_matrix.multiply(edge_matrix>=400)
@@ -38,13 +38,27 @@ class HumanTraffic:
         # train data test data
         data_samples = []
         data_labels = []
-        for i in range(48 - seq_num, in_matrix.shape[1] - seq_num):
+        for i in range((48 * 7 - seq_num) + int(seq_num_trend / 2), in_matrix.shape[1] - seq_num):
             x1 = np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1)
-            x2 = np.concatenate((in_matrix[:, i+seq_num - 48: i + seq_num - 1: 48], out_matrix[:, i + seq_num - 48: i + seq_num - 1: 48]), axis=1)
-            # x3 = np.concatenate((in_matrix[:, i + 3 - (48 * 7): i + 2: 48 * 7], out_matrix[:, i + 3 - 48 * 7: i + 2: 48 * 7]), axis=1)
-            data_samples.append(np.concatenate((x1, x2), axis=1))
+            x2 = np.concatenate((in_matrix[:, (i + seq_num - 48) - int(seq_num_period / 2): (i + seq_num - 48) + int(seq_num_period / 2) + (seq_num_period % 2)], out_matrix[:, (i + seq_num - 48) - int(seq_num_period / 2): (i + seq_num - 48) + int(seq_num_period / 2) + (seq_num_period % 2)]), axis=1)
+            x3 = np.concatenate((in_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)], out_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)]), axis=1)
+            data_samples.append(np.concatenate((x1, x2, x3), axis=1))
             data_labels.append(np.concatenate((in_matrix[:, i + seq_num:i + seq_num + 1], out_matrix[:, i + seq_num:i + seq_num + 1]), axis=1))
-            # data_labels.append(in_matrix[:, i + seq_num])
+
+        # for i in range((48 * 7 - seq_num) + int(seq_num_trend / 2), in_matrix.shape[1] - seq_num):
+        #     x1 = np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1)
+        #     x2 = np.concatenate((in_matrix[:, (i + seq_num - 48) - int(seq_num_period / 2): (i + seq_num - 48) + int(seq_num_period / 2) + (seq_num_period % 2)], out_matrix[:, (i + seq_num - 48) - int(seq_num_period / 2): (i + seq_num - 48) + int(seq_num_period / 2) + (seq_num_period % 2)]), axis=1)
+        #     x3 = np.concatenate((in_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)], out_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)]), axis=1)
+        #     data_samples.append(np.concatenate((x1, x2, x3), axis=1))
+        #     data_labels.append(np.concatenate((in_matrix[:, i + seq_num:i + seq_num + 1], out_matrix[:, i + seq_num:i + seq_num + 1]), axis=1))
+
+        # for i in range(48 - seq_num, in_matrix.shape[1] - seq_num):
+        #     x1 = np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1)
+        #     x2 = np.concatenate((in_matrix[:, i+seq_num - 48: i + seq_num - 1: 48], out_matrix[:, i + seq_num - 48: i + seq_num - 1: 48]), axis=1)
+        #     # x3 = np.concatenate((in_matrix[:, i + 3 - (48 * 7): i + 2: 48 * 7], out_matrix[:, i + 3 - 48 * 7: i + 2: 48 * 7]), axis=1)
+        #     data_samples.append(np.concatenate((x1, x2), axis=1))
+        #     data_labels.append(np.concatenate((in_matrix[:, i + seq_num:i + seq_num + 1], out_matrix[:, i + seq_num:i + seq_num + 1]), axis=1))
+        #     # data_labels.append(in_matrix[:, i + seq_num])
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
@@ -621,16 +635,16 @@ class HumanTraffic:
         # out_matrix[out_matrix>1] = 1
         # in_matrix = in_matrix * 2.0 - 1.0
         # out_matrix = out_matrix * 2.0 - 1.0
-        #in_matrix = np.array(in_matrix) * 1.0
-        #out_matrix = np.array(out_matrix) * 1.0
-        #self.in_avg = np.mean(in_matrix, axis=0)
-        #self.in_std = np.std(in_matrix, axis=0)
-        #self.out_avg = np.mean(out_matrix, axis=0)
-        #self.out_std = np.std(out_matrix, axis=0)
-        #in_matrix -= self.in_avg
-        #in_matrix /= self.in_std
-        #out_matrix -= self.out_avg
-        #ut_matrix /= self.out_std
+        # in_matrix = np.array(in_matrix) * 1.0
+        # out_matrix = np.array(out_matrix) * 1.0
+        # self.in_avg = np.mean(in_matrix, axis=0)
+        # self.in_std = np.std(in_matrix, axis=0)
+        # self.out_avg = np.mean(out_matrix, axis=0)
+        # self.out_std = np.std(out_matrix, axis=0)
+        # in_matrix -= self.in_avg
+        # in_matrix /= self.in_std
+        # out_matrix -= self.out_avg
+        # ut_matrix /= self.out_std
         return in_matrix, out_matrix
 
     def reverse_normalize(self, data):
