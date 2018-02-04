@@ -258,7 +258,7 @@ class GconvModel(GraphModel):
         self.build_graph(self.node_num, np.sum(self.feature_num), self.out_feature_num)
 
     def to_string(self):
-        str = '|{0}| {1}| {2}| {3}| {4}| {5}| {6}| {7}| {8}| {9}'.format(self.feature_num, self.batch_size, self.in_feature_num, self.num_time_steps_closeness, self.num_hidden, self.kernel_num, self.learning_rate, self.filter, self.conv_layer_num, self.infer_func)
+        str = '|{0}| {1}| {2}| {3}| {4}| {5}| {6}| {7}| {8}| {9} {10}'.format(self.feature_num, self.batch_size, self.in_feature_num, self.num_time_steps_closeness, self.num_hidden, self.kernel_num, self.learning_rate, self.filter, self.conv_layer_num, self.lstm_layer_count, self.infer_func)
         return str
 
     def _inference(self, x, dropout):
@@ -268,8 +268,8 @@ class GconvModel(GraphModel):
         return None
 
     def inference_glstm(self, x):
-        A, B, C = x.get_shape()
-        x = tf.reshape(x, [int(A), int(B), self.num_time_steps_closeness, 2])
+        A, B, C = x.get_shape().as_list()
+        x = tf.reshape(x, [A, B, self.num_time_steps_closeness, int(C / self.num_time_steps_closeness)])
         x = tf.transpose(x, [0, 1, 3, 2])
         x = tf.unstack(x, self.num_time_steps_closeness, 3)
         lstm_output = self.glstm_layer(x, self.num_time_steps_closeness, self.lstm_layer_count)
@@ -282,7 +282,7 @@ class GconvModel(GraphModel):
     def inference_glstm_period_no_expand(self, x):
         assert(self.num_time_steps_closeness == self.num_time_steps_period)
         num_dims = x.get_shape()
-        x = tf.reshape(x, [int(num_dims[0]), int(num_dims[1]), self.num_time_steps_closeness, int(num_dims) / self.num_time_steps_closeness])
+        x = tf.reshape(x, [int(num_dims[0]), int(num_dims[1]), self.num_time_steps_closeness, int(num_dims[2]) / self.num_time_steps_closeness])
         x = tf.transpose(x, [0, 1, 3, 2])
         x = tf.unstack(x, self.num_time_steps_closeness, 3)
         lstm_output = self.glstm_layer(x, self.num_time_steps_closeness, self.lstm_layer_count)
@@ -371,8 +371,9 @@ class GconvModel(GraphModel):
         return x
 
     def inference_glstm_gconv(self, x):
-        A, B, C = x.get_shape()
-        x = tf.reshape(x, [int(A), int(B), self.num_time_steps_closeness, 2])
+        batch_size, node_num, feature_in = x.get_shape().as_list()
+        self.in_feature_num = int(feature_in / self.num_time_steps_closeness)
+        x = tf.reshape(x, [int(batch_size), int(node_num), self.num_time_steps_closeness, self.in_feature_num])
         x = tf.transpose(x, [0, 1, 3, 2])
         x = tf.unstack(x, self.num_time_steps_closeness, 3)
         lstm_output = self.glstm_layer(x, self.num_time_steps_closeness, self.lstm_layer_count)
@@ -389,6 +390,31 @@ class GconvModel(GraphModel):
                 x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num,
                                              self.kernel_num)
         # x = self.activation_function(x, 'tanh')
+        return x
+
+    def inference_glstm_period_no_expand_gconv(self, x):
+        assert(self.num_time_steps_closeness == self.num_time_steps_period)
+        batch_size, node_num, feature_in = x.get_shape().as_list()
+        batch_size, node_num, feature_in = int(batch_size), int(node_num), int(feature_in)
+        self.in_feature_num = int(feature_in / self.num_time_steps_closeness) 
+        print("feature in: {0} num_time_steps: {1}\n".format(feature_in, self.num_time_steps_closeness))
+        x = tf.reshape(x, [batch_size, node_num, self.num_time_steps_closeness, self.in_feature_num])
+        x = tf.transpose(x, [0, 1, 3, 2])
+        x = tf.unstack(x, self.num_time_steps_closeness, 3)
+        lstm_output = self.glstm_layer(x, self.num_time_steps_closeness, self.lstm_layer_count)
+            # Check the tf version here
+        lstm_output = lstm_output[-1]  # tf.stack(outputs, axis=3)
+        x = lstm_output
+        # output with full connected layer
+        with tf.name_scope('conv_layers'):
+            for i in range(self.conv_layer_num):
+                with tf.variable_scope('conv_layer_{}'.format(i)):
+                    x = self.residual_layer(x, self.num_hidden, 'relu', 'residual_layer_{0}'.format(i))
+                    self.nets[x.name] = x
+        with tf.name_scope('output_layer'):
+            with tf.variable_scope('output_layer'):
+                x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.out_feature_num,
+                                             self.kernel_num)
         return x
 
     def inference_glstm_period_expand(self, x):
