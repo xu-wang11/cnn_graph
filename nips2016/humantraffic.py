@@ -22,6 +22,18 @@ class HumanTraffic:
         self.out_matrix = None
         self.dataset_path = data_set_path
 
+    def dataset_split(samples, labels):
+        total_row = samples.shape[0]
+        train_row = int((total_row - 168) * 0.7)
+        validate_row = total_row - 168 - train_row
+
+        train_data = samples[0:train_row, :]
+        validate_data = samples[train_row: train_row + validate_row, :]
+        test_data = samples[train_row + validate_row:, :]
+        train_labels = labels[0: train_row, :]
+        validate_labels = labels[train_row: train_row + validate_row, :]
+        test_labels = data_labels[-168:, :]
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
 
     def load_ln_data_period(self, seq_num, seq_num_period=1, seq_num_trend=1, datafile='ln_data.mat'):
         ln_data = loadmat(os.path.join(self.dataset_path, datafile))
@@ -65,23 +77,7 @@ class HumanTraffic:
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        # shuffle_array = np.random.permutation(data_samples.shape[0])
-        # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
-        # data_samples = data_samples[shuffle_array]
-        # data_labels = data_labels[shuffle_array]
-        total_row = data_samples.shape[0]
-        train_row = int(total_row * 0.75)
-        validate_row = int(total_row * 0.125)
-
-        train_data = data_samples[0:train_row, :]
-        validate_data = data_samples[train_row: train_row + validate_row, :]
-        test_data = data_samples[train_row + validate_row:, :]
-        train_labels = data_labels[0: train_row, :]
-        validate_labels = data_labels[train_row: train_row + validate_row, :]
-        test_labels = data_labels[train_row + validate_row:, :]
-        # normalized
-
-        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
+        return self.dataset_split(data_samples, data_labels)
 
     def load_split_ln_data_period(self, seq_num, seq_num_period=1, seq_num_trend=1, datafile='ln_data.mat'):
         ln_data = loadmat(os.path.join(self.dataset_path, datafile))
@@ -112,23 +108,7 @@ class HumanTraffic:
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        # shuffle_array = np.random.permutation(data_samples.shape[0])
-        # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
-        # shuffle_array = np.random.permutation(data_samples.shape[0])
-        # data_samples = data_samples[shuffle_array]
-        # data_labels = data_labels[shuffle_array]
-        total_row = data_samples.shape[0]
-        train_row = int(total_row * 0.75)
-        validate_row = int(total_row * 0.125)
-
-        train_data = data_samples[0:train_row, :]
-        validate_data = data_samples[train_row: train_row + validate_row, :]
-        test_data = data_samples[train_row + validate_row:, :]
-        train_labels = data_labels[0: train_row, :]
-        validate_labels = data_labels[train_row: train_row + validate_row, :]
-        test_labels = data_labels[train_row + validate_row:, :]
-        # normalized
-        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
+       return self.dataset_split(data_samples, data_labels)
 
     def load_split_ln_data(self, seq_num, datafile='split_lndata_street.mat'):
         # ln_data = loadmat(os.path.join(self.dataset_path, 'split_ln_data_2.mat'))
@@ -145,7 +125,7 @@ class HumanTraffic:
         target_out_matrix = ln_data['outmatrix']
 
 
-        target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix = self.split_normalize_seasonal_decompose(target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix)
+        target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix = self.normalize_split(target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix)
         # target_in_matrix, target_out_matrix = self.normalize(target_in_matrix, target_out_matrix)
         # split_in_matrix = split_in_matrix * 1.0 / self.max_val
         # split_out_matrix = split_out_matrix * 1.0 / self.max_val
@@ -155,6 +135,7 @@ class HumanTraffic:
         data_labels = []
         for i in range(target_in_matrix.shape[1] - seq_num):
             x1 = np.concatenate((split_in_matrix[:, i:i+seq_num], split_out_matrix[:, i:i + seq_num]), axis=1)
+            x1 = np.transpose(x1, [0, 2, 1])
             x1 = np.reshape(x1, newshape=(x1.shape[0], x1.shape[1] * x1.shape[2]))
             data_samples.append(x1)
             data_labels.append(np.concatenate((target_in_matrix[:, i+seq_num:i+seq_num + 1], target_out_matrix[:, i+seq_num:i+seq_num + 1]), axis=1))
@@ -166,19 +147,7 @@ class HumanTraffic:
         # data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        total_row = data_samples.shape[0]
-        train_row = int(total_row * 0.75)
-        validate_row = int(total_row * 0.125)
-        train_data = data_samples[0:train_row, :]
-        validate_data = data_samples[train_row: train_row + validate_row, :]
-        test_data = data_samples[train_row + validate_row:, :]
-        train_labels = data_labels[0: train_row, :]
-        validate_labels = data_labels[train_row: train_row + validate_row, :]
-        test_labels = data_labels[train_row + validate_row:, :]
-        # normalized
-
-        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
-
+        return self.dataset_split(data_samples, data_labels)
 
     def load_bj_data(self, seq_num):
         ln_data = loadmat(os.path.join(self.dataset_path, 'bj_data.mat'))
@@ -200,24 +169,7 @@ class HumanTraffic:
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        # shuffle_array = np.random.permutation(data_samples.shape[0])
-        # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
-        # data_samples = data_samples[shuffle_array]
-        # data_labels = data_labels[shuffle_array]
-        total_row = data_samples.shape[0]
-        train_row = int(total_row * 0.75)
-        validate_row = int(total_row * 0.125)
-
-        train_data = data_samples[0:train_row, :]
-        validate_data = data_samples[train_row: train_row + validate_row, :]
-        test_data = data_samples[train_row + validate_row:, :]
-        train_labels = data_labels[0: train_row, :]
-        validate_labels = data_labels[train_row: train_row + validate_row, :]
-        test_labels = data_labels[train_row + validate_row:, :]
-        # normalized
-
-        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, None
-
+        return self.dataset_split(data_samples, data_labels)
 
     def load_bj_clus_data(self, seq_num):
         ln_data = loadmat(os.path.join(self.dataset_path, 'bj_clus.mat'))
@@ -244,24 +196,7 @@ class HumanTraffic:
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        shuffle_array = np.random.permutation(data_samples.shape[0])
-        # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
-        data_samples = data_samples[shuffle_array]
-        data_labels = data_labels[shuffle_array]
-        total_row = data_samples.shape[0]
-        train_row = int(total_row * 0.75)
-        validate_row = int(total_row * 0.125)
-
-        train_data = data_samples[0:train_row, :]
-        validate_data = data_samples[train_row: train_row + validate_row, :]
-        test_data = data_samples[train_row + validate_row:, :]
-        train_labels = data_labels[0: train_row, :]
-        validate_labels = data_labels[train_row: train_row + validate_row, :]
-        test_labels = data_labels[train_row + validate_row:, :]
-        # normalized
-
-        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
-
+        return self.dataset_split(data_samples, data_labels)
 
 
     def load_bj_data_period_trend(self, seq_num, seq_num_period=1, seq_num_trend=1):
@@ -287,23 +222,7 @@ class HumanTraffic:
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        # shuffle_array = np.random.permutation(data_samples.shape[0])
-        # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
-        # data_samples = data_samples[shuffle_array]
-        # data_labels = data_labels[shuffle_array]
-        total_row = data_samples.shape[0]
-        train_row = int(total_row * 0.75)
-        validate_row = int(total_row * 0.125)
-
-        train_data = data_samples[0:train_row, :]
-        validate_data = data_samples[train_row: train_row + validate_row, :]
-        test_data = data_samples[train_row + validate_row:, :]
-        train_labels = data_labels[0: train_row, :]
-        validate_labels = data_labels[train_row: train_row + validate_row, :]
-        test_labels = data_labels[train_row + validate_row:, :]
-        # normalized
-        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, None
-
+        return self.dataset_split(data_samples, data_labels)
 
     def load_bj_clus_period_trend(self, seq_num):
         ln_data = loadmat(os.path.join(self.dataset_path, 'bj_clus.mat'))
@@ -333,23 +252,7 @@ class HumanTraffic:
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        shuffle_array = np.random.permutation(data_samples.shape[0])
-        # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
-        data_samples = data_samples[shuffle_array]
-        data_labels = data_labels[shuffle_array]
-        total_row = data_samples.shape[0]
-        train_row = int(total_row * 0.75)
-        validate_row = int(total_row * 0.125)
-
-        train_data = data_samples[0:train_row, :]
-        validate_data = data_samples[train_row: train_row + validate_row, :]
-        test_data = data_samples[train_row + validate_row:, :]
-        train_labels = data_labels[0: train_row, :]
-        validate_labels = data_labels[train_row: train_row + validate_row, :]
-        test_labels = data_labels[train_row + validate_row:, :]
-        # normalized
-
-        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
+        return self.dataset_split(data_samples, data_labels)
 
     # only use nodes contains edges
     def load_unisolate_data(self, seq_num):
@@ -399,77 +302,9 @@ class HumanTraffic:
         remove_labels = np.array(remove_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
         # shuffle_array = np.random.permutation(data_samples.shape[0])
-        shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
-        data_samples = data_samples[shuffle_array]
-        data_labels = data_labels[shuffle_array]
-        total_row = data_samples.shape[0]
-        train_row = int(total_row * 0.75)
-        validate_row = int(total_row * 0.125)
-
-        train_data = data_samples[0:train_row, :]
-        validate_data = data_samples[train_row: train_row + validate_row, :]
-        test_data = data_samples[train_row + validate_row:, :]
-        train_labels = data_labels[0: train_row, :]
-        validate_labels = data_labels[train_row: train_row + validate_row, :]
-        test_labels = data_labels[train_row + validate_row:, :]
-        remove_labels = remove_labels[train_row+validate_row:, :]
-        # normalized
-
-        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix, remove_labels
+        return self.dataset_split(data_samples, data_labels)
 
     def load_data(self, seq_num):
-        # load in_matrix
-        # f1 = open(os.path.join(self.dataset_path, 'in_matrix.txt'), 'r')
-        # in_matrix = []
-        # for line in f1.readlines():
-        #     in_matrix.append([int(v) for v in line[0:-1].split(' ')])
-        # in_matrix = np.array(in_matrix)
-        # in_matrix = in_matrix[1:, 1:]
-        # f1.close()
-        # f2 = open(os.path.join(self.dataset_path, 'out_matrix.txt'), 'r')
-        # out_matrix = []
-        # for line in f2.readlines():
-        #     out_matrix.append([int(v) for v in line[0:-1].split(' ')])
-        # out_matrix = np.array(out_matrix)
-        # out_matrix = out_matrix[1:, 1:]
-        #
-        # f2.close()
-        # edge_matrix = None
-        # if os.path.isfile(os.path.join(self.dataset_path, 'edge_weight.pkl')):
-        #     pkl_file = open(os.path.join(self.dataset_path, 'edge_weight.pkl'), 'rb')
-        #     edge_matrix = pickle.load(pkl_file)
-        #     pkl_file.close()
-        # else:
-        #     f3 = open(os.path.join(self.dataset_path, 'edge_weight.txt'), 'r')
-        #     I = []
-        #     J = []
-        #     V = []
-
-        #     for line in f3.readlines():
-        #         split_items = line[0:-1].split(' ')
-        #         in_node = int(split_items[0])
-        #         out_node = int(split_items[1])
-        #         weight_array = [int(v.strip()) for v in line[line.index('[') + 1: line.index(']')].split(',')]
-        #         weight_val = np.sum(np.array(weight_array)) * 1.0
-        #         if weight_val > 600:
-        #             I.append(in_node)
-        #             J.append(out_node)
-        #             V.append(math.log(weight_val))
-        #     print(len(V))
-        #     edge_matrix = scipy.sparse.coo_matrix((V, (I, J)), shape=(in_matrix.shape[0], in_matrix.shape[0]))
-        #     pkl_file = open(os.path.join(self.dataset_path, 'edge_weight.pkl'), 'wb')
-        #     pickle.dump(edge_matrix, pkl_file)
-        #     pkl_file.close()
-
-        # replace zero columns
-        # in_matrix[:, 196] = in_matrix[:, 196 - 48]
-        # out_matrix[:, 196] = out_matrix[:, 196 - 48]
-        # normalize
-
-        # max_val = np.amax([np.amax(in_matrix), np.amax(out_matrix)])
-        # max_val = 500.0
-        # in_matrix = in_matrix / max_val  # (in_matrix - max_val / 2) / (max_val / 2)
-        # out_matrix = out_matrix / max_val  # (out_matrix - max_val / 2) / (max_val /2)
         ln_data = loadmat(os.path.join(self.dataset_path, 'ln_data.mat'))
         edge_matrix = loadmat(os.path.join(self.dataset_path, 'edge_matrix.mat'))['edge_matrix']
         edge_matrix = edge_matrix + edge_matrix.transpose()
@@ -499,22 +334,7 @@ class HumanTraffic:
         # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
         print(shuffle_array)
         # pickle.dump(shuffle_array, open(os.path.join(self.dataset_path, 'shuffle_array_forzy.pkl'), 'wb'), 2)
-        data_samples = data_samples[shuffle_array]
-        data_labels = data_labels[shuffle_array]
-        total_row = data_samples.shape[0]
-        train_row = int(total_row * 0.75)
-        validate_row = int(total_row * 0.125)
-
-        train_data = data_samples[0:train_row, :]
-        validate_data = data_samples[train_row: train_row + validate_row, :]
-        test_data = data_samples[train_row + validate_row:, :]
-        train_labels = data_labels[0: train_row, :]
-        validate_labels = data_labels[train_row: train_row + validate_row, :]
-        test_labels = data_labels[train_row + validate_row:, :]
-        # normalized
-
-        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
-
+        return self.dataset_split(data_samples, data_labels)
 
     def load_lstm_data(self, seq_num, neighbor_num, datafile):
         ln_data = loadmat(os.path.join(self.dataset_path, datafile))
@@ -545,8 +365,6 @@ class HumanTraffic:
             # validate_labels = data_labels[train_row: train_row + validate_row, :]
             test_labels = data_labels[train_row + validate_row:, :]
             data_collection.append({'train_data':train_data, 'test_data':test_data, 'train_labels': train_labels, 'test_labels': test_labels})
-
-    
         return data_collection
 
     def load_lndata_street(self, seq_num, datafile='lndata_street.mat'):
@@ -563,8 +381,8 @@ class HumanTraffic:
 
         in_matrix = ln_data['inmatrix']
         out_matrix = ln_data['outmatrix']
-        # in_matrix, out_matrix = self.normalize(in_matrix, out_matrix)
-        in_matrix, out_matrix = self.normalize_seasonal_decompose(in_matrix, out_matrix)
+        in_matrix, out_matrix = self.normalize(in_matrix, out_matrix)
+        # in_matrix, out_matrix = self.normalize_seasonal_decompose(in_matrix, out_matrix)
 
         # train data test data
         data_samples = []
@@ -576,24 +394,7 @@ class HumanTraffic:
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        # shuffle_array = np.random.permutation(data_samples.shape[0])
-        # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
-        # shuffle_array = np.random.permutation(data_samples.shape[0])
-        # data_samples = data_samples[shuffle_array]
-        # data_labels = data_labels[shuffle_array]
-        total_row = data_samples.shape[0]
-        train_row = int(total_row * 0.75)
-        validate_row = int(total_row * 0.125)
-
-        train_data = data_samples[0:train_row, :]
-        validate_data = data_samples[train_row: train_row + validate_row, :]
-        test_data = data_samples[train_row + validate_row:, :]
-        train_labels = data_labels[0: train_row, :]
-        validate_labels = data_labels[train_row: train_row + validate_row, :]
-        test_labels = data_labels[train_row + validate_row:, :]
-        # normalized
-
-        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
+        return self.dataset_split(data_samples, data_labels)
 
     def split_normalize_seasonal_decompose(self, in_matrix, out_matrix, split_in_matrix, split_out_matrix):
         in_matrix = in_matrix.astype(np.float32)
@@ -625,6 +426,15 @@ class HumanTraffic:
         split_out_matrix = split_out_matrix * 1.0 / (self.max_val - self.min_val)
         return in_matrix, out_matrix, split_in_matrix, split_out_matrix
 
+    def normalize_split(self, in_matrix, out_matrix, split_in_matrix, split_out_matrix):
+        self.min_val = 0
+        self.max_val = np.amax([np.amax(in_matrix), np.amax(out_matrix)])
+        # self.max_val = 1000
+        in_matrix = in_matrix * 1.0 / self.max_val # (in_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
+        out_matrix = out_matrix * 1.0 / self.max_val # (out_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
+        split_in_matrix = split_in_matrix * 1.0 / self.max_val
+        split_out_matrix = split_out_matrix * 1.0 / self.max_val
+        return in_matrix, out_matrix, split_in_matrix, split_out_matrix
 
     def normalize_seasonal_decompose(self, in_matrix, out_matrix):
         in_matrix = in_matrix.astype(np.float32)
@@ -653,21 +463,6 @@ class HumanTraffic:
         # self.max_val = 1000
         in_matrix = in_matrix * 1.0 / self.max_val # (in_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
         out_matrix = out_matrix * 1.0 / self.max_val # (out_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
-
-        # in_matrix[in_matrix>1] = 1
-        # out_matrix[out_matrix>1] = 1
-        # in_matrix = in_matrix * 2.0 - 1.0
-        # out_matrix = out_matrix * 2.0 - 1.0
-        # in_matrix = np.array(in_matrix) * 1.0
-        # out_matrix = np.array(out_matrix) * 1.0
-        # self.in_avg = np.mean(in_matrix, axis=0)
-        # self.in_std = np.std(in_matrix, axis=0)
-        # self.out_avg = np.mean(out_matrix, axis=0)
-        # self.out_std = np.std(out_matrix, axis=0)
-        # in_matrix -= self.in_avg
-        # in_matrix /= self.in_std
-        # out_matrix -= self.out_avg
-        # ut_matrix /= self.out_std
         return in_matrix, out_matrix
 
     def reverse_normalize(self, data):

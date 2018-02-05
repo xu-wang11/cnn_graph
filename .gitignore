@@ -12,3 +12,4 @@ summaries/
 checkpoints/
 
 .idea/
+*.txt
