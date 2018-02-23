@@ -6,9 +6,9 @@
 
 
 # In[ ]:
-import sys, os        
+import sys, os
 sys.path.insert(0, '..')
-from lib import models, graph, coarsening, utils
+from lib import graph_conv, graph, coarsening, utils
 import numpy as np
 import time
 from nips2016 import humantraffic
@@ -20,7 +20,7 @@ import math
 
 # notification
 sys.path.insert(0, '../../')
-np.random.seed(2017) 
+np.random.seed(2017)
 
 # 配置显存大小
 config = tf.ConfigProto()
@@ -51,10 +51,7 @@ flags.DEFINE_string('dir_data', os.path.join('..', 'data', 'mnist'), 'Directory 
 
 # In[2]:
 
-from CoreUtils.SendNotification import send_notification
-from CoreUtils import SendNotification
-# SendNotification.http_config = '101.5.99.161'
-SendNotification.http_config = '192.168.34.138'
+
 
 # print()
 
@@ -111,7 +108,7 @@ ht = humantraffic.HumanTraffic(DATA_SET_PATH)
 train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_bj_data(seq_num)
 # train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_data(seq_num)
 # train_data, val_data, test_data, train_labels, val_labels, test_labels, A1 = ht.load_split_ln_data(seq_num)
-# A1 = A1.astype(np.float32)       
+# A1 = A1.astype(np.float32)
 # A = sparse_matrix_element_wise_max(A, A1)
 # A = A.astype(np.float32)
 # L = [graph.laplacian(A1, normalized=True)] # [graph.laplacian(A, normalized=True) for A in graphs]
@@ -144,13 +141,13 @@ print(train_data.shape)
 # Common hyper-parameters for networks with one convolutional layer.
 common['regularization'] = 0
 common['dropout']        = 1
-common['learning_rate']  = 0.015
+common['learning_rate']  = 0.05
 common['decay_rate']     = 0.9
 common['momentum']       = 0.9
 common['F']              = [10]
 common['K']              = [20]
 common['p']              = [1]
-common['M']              = [train_data.shape[1]]                     
+common['M']              = [train_data.shape[1]]
 
 
 # In[ ]:
@@ -158,7 +155,7 @@ common['M']              = [train_data.shape[1]]
 # In[ ]:
 
 if True:
-    
+
     # sess = tf.Session(config=config)
     start_time = time.time()
     name = 'fgconv_softmax'
@@ -167,13 +164,13 @@ if True:
     # params['filter'] = 'chebyshev5' # fourier
     #params['filter'] = 'spline'
     params['filter'] = 'fourier'
-    params['_nfilter'] = 32
+    params['_nfilter'] = 64
     params['_nres_layer_count'] = 4
-    params['K'] = [2]
+    params['K'] = [6]
     params['C_0'] = train_data.shape[2]
     params['model_name'] = 'ResGNN'
     # params['model_name'] = 'GNN'
-    train_pred, test_pred =  model_perf.test(models.cgcnn(L, **params), name, params,
+    train_pred, test_pred =  model_perf.test(graph_conv.GraphConv(L, **params), name, params,
                     train_data, train_labels, val_data, val_labels, test_data, test_labels)
 
     train_pred, test_pred = ht.reverse_normalize(train_pred), ht.reverse_normalize(test_pred)

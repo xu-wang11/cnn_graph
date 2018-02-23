@@ -185,7 +185,7 @@ class GConvLSTMCell(RNNCell):
                 zxt = self.filter(inputs, laplacian, lmax, feat_out, K, Wzxt)
                 zht = self.filter(h, laplacian, lmax, feat_out, K, Wzht)
                 zt = zxt + zht + bzt
-                zt = tf.tanh(zt)
+                zt = tf.tan(zt)
 
                 # ixt = cheby_conv(inputs, laplacian, lmax, feat_out, K, Wixt)
                 # iht = cheby_conv(h, laplacian, lmax, feat_out, K, Wiht)
@@ -206,7 +206,7 @@ class GConvLSTMCell(RNNCell):
                 oxt = self.filter(inputs, laplacian, lmax, feat_out, K, Woxt)
                 oht = self.filter(h, laplacian, lmax, feat_out, K, Woht)
                 ot = oxt + oht + bot
-                ot = tf.sigmoid(ot)
+                ot = tf.tanh(ot)
 
                 # c
                 new_c = ft * c + it * zt
@@ -226,7 +226,7 @@ class GconvModel(GraphModel):
     def __init__(self, laplacian, seq_num_closeness, seq_num_period, seq_num_trend, filter_num=64, conv_layer_num=4, filter='cheby_conv',
                  num_epochs=20, learning_rate=0.1, decay_rate=0.95, decay_steps=None, momentum=0.9,
                  regularization=0, dropout=0, batch_size=100, eval_frequency=200,
-                 dir_name='', feature_num=6, kernel_num=2, in_feature_num=2, out_feature_num=2, infer_func='inference_glstm', lstm_layer_count = 1):
+                 dir_name='', feature_num=6, kernel_num=2, in_feature_num=2, out_feature_num=2, infer_func='inference_glstm', lstm_layer_count = 1, num_hidden_conv=32):
 
         super().__init__()
 
@@ -255,10 +255,11 @@ class GconvModel(GraphModel):
         self.conv_layer_num = conv_layer_num
         self.infer_func = infer_func
         self.lstm_layer_count = lstm_layer_count
+        self.num_hidden_conv = num_hidden_conv
         self.build_graph(self.node_num, np.sum(self.feature_num), self.out_feature_num)
 
     def to_string(self):
-        str = '|{0}| {1}| {2}| {3}| {4}| {5}| {6}| {7}| {8}| {9} {10}'.format(self.feature_num, self.batch_size, self.in_feature_num, self.num_time_steps_closeness, self.num_hidden, self.kernel_num, self.learning_rate, self.filter, self.conv_layer_num, self.lstm_layer_count, self.infer_func)
+        str = '|{0}| {1}| {2}| {3}| {4}| {5}| {6}| {7}| {8}| {9} | {10}| {11}'.format(self.feature_num, self.batch_size, self.in_feature_num, self.num_time_steps_closeness, self.num_hidden, self.kernel_num, self.learning_rate, self.filter, self.conv_layer_num, self.lstm_layer_count, self.infer_func, self.num_hidden_conv)
         return str
 
     def _inference(self, x, dropout):
@@ -380,10 +381,16 @@ class GconvModel(GraphModel):
             # Check the tf version here
         lstm_output = lstm_output[-1]  # tf.stack(outputs, axis=3)
         x = lstm_output
+        with tf.name_scope('conv_init'):
+            with tf.variable_scope('conv_init'):
+                x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.num_hidden_conv, self.kernel_num)
+                self.nets[x.name] = x
+                x = self.activation_function(x, 'relu')
+                self.nets[x.name] = x
         with tf.name_scope('conv_layers'):
             for i in range(self.conv_layer_num):
                 with tf.variable_scope('conv_layer_{}'.format(i)):
-                    x = self.residual_layer(x, self.num_hidden, 'relu', 'residual_layer_{0}'.format(i))
+                    x = self.residual_layer(x, self.num_hidden_conv, 'relu', 'residual_layer_{0}'.format(i))
                     self.nets[x.name] = x
         with tf.name_scope('output_layer'):
             with tf.variable_scope('output_layer'):
@@ -392,7 +399,7 @@ class GconvModel(GraphModel):
         # x = self.activation_function(x, 'tanh')
         return x
 
-def inference_glstm_gconv_no_expand(self, x):
+    def inference_glstm_gconv_no_expand(self, x):
         batch_size, node_num, feature_in = x.get_shape().as_list()
         self.in_feature_num = int(feature_in / self.num_time_steps_closeness)
         x = tf.reshape(x, [int(batch_size), int(node_num), self.in_feature_num, self.num_time_steps_closeness])
@@ -402,10 +409,16 @@ def inference_glstm_gconv_no_expand(self, x):
             # Check the tf version here
         lstm_output = lstm_output[-1]  # tf.stack(outputs, axis=3)
         x = lstm_output
+        with tf.name_scope('conv_init'):
+            with tf.variable_scope('conv_init'):
+                x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, self.num_hidden_conv, self.kernel_num)
+                self.nets[x.name] = x
+                x = self.activation_function(x, 'relu')
+                self.nets[x.name] = x
         with tf.name_scope('conv_layers'):
             for i in range(self.conv_layer_num):
                 with tf.variable_scope('conv_layer_{}'.format(i)):
-                    x = self.residual_layer(x, self.num_hidden, 'relu', 'residual_layer_{0}'.format(i))
+                    x = self.residual_layer(x, self.num_hidden_conv, 'relu', 'residual_layer_{0}'.format(i))
                     self.nets[x.name] = x
         with tf.name_scope('output_layer'):
             with tf.variable_scope('output_layer'):
@@ -413,6 +426,7 @@ def inference_glstm_gconv_no_expand(self, x):
                                              self.kernel_num)
         # x = self.activation_function(x, 'tanh')
         return x
+
 
     def inference_glstm_gconv_split(self, x):
         batch_size, node_num, feature_in = x.get_shape().as_list()
@@ -614,12 +628,11 @@ def inference_glstm_gconv_no_expand(self, x):
 
     def fc_layer(self, x, feature_out):
         batch_size, node_num, feature_in = x.get_shape().as_list()
-        x = tf.reshape(x, [batch_size * node_num, feature_in])
-        with tf.name_scope('weight'):
-            w = tf.Variable(tf.random_normal([feature_in, feature_out]))
-            b = tf.Variable(tf.random_normal([feature_out]))
-        x = tf.matmul(x, w) + b
-        x = tf.reshape(x, [batch_size, node_num, feature_out])
+        with tf.name_scope('conv_init'):
+            with tf.variable_scope('conv_init'):
+                x = getattr(filter, self.filter)(x, self.laplacian, self.lmax, feature_out, self.kernel_num)
+                self.nets[x.name] = x
+        # x = tf.reshape(x, [batch_size, node_num, feature_out])
         return x
 
     def activation_function(self, x, activation):

@@ -289,7 +289,7 @@ class Model(object):
                                  feat_in=self.feat_in, K=self.num_kernel, 
                                  nNode=self.num_node)
                 output_variable = {
-                    'weight': tf.Variable(tf.random_normal([self.num_hidden, self.feat_out])),
+                    'weight': tf.Variable(tf.random_normal([self.num_hidden * self.num_kernel  , self.feat_out])),
                     'bias' : tf.Variable(tf.random_normal([self.feat_out]))}
             
             else:

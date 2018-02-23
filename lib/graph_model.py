@@ -31,6 +31,7 @@ class GraphModel(object):
         self.op_init = None
         self.op_summary = None
         self.op_saver = None
+        self.sess = None
 
     # create tensor flow graph
     def build_graph(self, node_num, feature_num, output_num):
@@ -53,11 +54,11 @@ class GraphModel(object):
             # Initialize variables, i.e. weights and biases.
             self.op_init = tf.global_variables_initializer()
             # Summaries for TensorBoard and Save for model parameters.
-            self.op_summary = tf.summary.merge_all()
-            self.op_saver = tf.train.Saver(max_to_keep=5)
+            # self.op_summary = tf.summary.merge_all()
+            # self.op_saver = tf.train.Saver(max_to_keep=5)
         self.graph.finalize()
-        writer = tf.summary.FileWriter(self._get_path("checkpoints") + "/graph_def", tf.Session().graph)
-        writer.close()
+        # writer = tf.summary.FileWriter(self._get_path("checkpoints") + "/graph_def", tf.Session().graph)
+        # writer.close()
 
     # High-level interface which runs the constructed computational graph.
     def predict(self, data, labels=None, sess=None):
@@ -123,13 +124,14 @@ class GraphModel(object):
     def fit(self, train_data, train_labels, val_data, val_labels):
         t_process, t_wall = time.process_time(), time.time()
         sess = tf.Session(graph=self.graph)
-        shutil.rmtree(self._get_path('summaries'), ignore_errors=True)
-        writer = tf.summary.FileWriter(self._get_path('summaries'), self.graph)
-        shutil.rmtree(self._get_path('checkpoints'), ignore_errors=True)
-        os.makedirs(self._get_path('checkpoints'))
-        path = os.path.join(self._get_path('checkpoints'), 'model')
-        sess.run(self.op_init)
-        sess.graph.finalize()
+        self.sess= sess
+        # shutil.rmtree(self._get_path('summaries'), ignore_errors=True)
+        # writer = tf.summary.FileWriter(self._get_path('summaries'), self.graph)
+        # shutil.rmtree(self._get_path('checkpoints'), ignore_errors=True)
+        # os.makedirs(self._get_path('checkpoints'))
+        # path = os.path.join(self._get_path('checkpoints'), 'model')
+        self.sess.run(self.op_init)
+        self.sess.graph.finalize()
 
         # Training.
         accuracies = []
@@ -177,19 +179,19 @@ class GraphModel(object):
                 print("time spend {0}...:\n".format(end_time - start_time))
                 start_time = time.time()
                 # Summaries for TensorBoard.
-                summary = tf.Summary()
-                summary.ParseFromString(sess.run(self.op_summary, feed_dict))
-                summary.value.add(tag='validation/accuracy', simple_value=accuracy)
-                summary.value.add(tag='validation/f1', simple_value=f1)
-                summary.value.add(tag='validation/loss', simple_value=loss)
-                writer.add_summary(summary, step)
+                # summary = tf.Summary()
+                # summary.ParseFromString(sess.run(self.op_summary, feed_dict))
+                # summary.value.add(tag='validation/accuracy', simple_value=accuracy)
+                # summary.value.add(tag='validation/f1', simple_value=f1)
+                # summary.value.add(tag='validation/loss', simple_value=loss)
+                # writer.add_summary(summary, step)
 
-                # Save model parameters (for evaluation).
-                self.op_saver.save(sess, path, global_step=step)
+                # # Save model parameters (for evaluation).
+                # self.op_saver.save(sess, path, global_step=step)
 
         print('validation accuracy: peak = {:.2f}, mean = {:.2f}'.format(max(accuracies), np.mean(accuracies[-10:])))
-        writer.close()
-        sess.close()
+        # writer.close()
+        # sess.close()
 
         t_step = (time.time() - t_wall) / num_steps
         return accuracies, losses, t_step
@@ -198,7 +200,7 @@ class GraphModel(object):
         sess = self._get_session()
         var = self.graph.get_tensor_by_name(name + ':0')
         val = sess.run(var)
-        sess.close()
+        # sess.close()
         return val
 
     # Methods to construct the computational graph.
@@ -235,6 +237,7 @@ class GraphModel(object):
             # b = self._bias_variable([1, 1], regularization=False)
             # prediction = tf.nn.tanh(x + b)
             # prediction = x
+            # prediction = x
             prediction = tf.nn.relu(x)  # tf.argmax(logits, axis=1)
             # prediction = tf.clip_by_value(prediction, 0, 1)
             self.nets[prediction.name] = prediction
@@ -256,16 +259,16 @@ class GraphModel(object):
             loss = cross_entropy
             self.nets[loss.name] = loss
             # Summaries for TensorBoard.
-            tf.summary.scalar('loss/cross_entropy', cross_entropy)
-            tf.summary.scalar('loss/regularization', regularization)
-            tf.summary.scalar('loss/total', loss)
+            # tf.summary.scalar('loss/cross_entropy', cross_entropy)
+            # tf.summary.scalar('loss/regularization', regularization)
+            # tf.summary.scalar('loss/total', loss)
             with tf.name_scope('averages'):
                 averages = tf.train.ExponentialMovingAverage(0.9)
                 # op_averages = loss
                 op_averages = averages.apply([cross_entropy])
-                tf.summary.scalar('loss/avg/cross_entropy', averages.average(cross_entropy))
-                # tf.summary.scalar('loss/avg/regularization', averages.average(regularization))
-                tf.summary.scalar('loss/avg/total', averages.average(loss))
+                # tf.summary.scalar('loss/avg/cross_entropy', averages.average(cross_entropy))
+                # # tf.summary.scalar('loss/avg/regularization', averages.average(regularization))
+                # tf.summary.scalar('loss/avg/total', averages.average(loss))
                 with tf.control_dependencies([op_averages]):
                     loss_average = tf.identity(averages.average(loss), name='control')
 
@@ -279,7 +282,7 @@ class GraphModel(object):
             if decay_rate != 1:
                 learning_rate = tf.train.exponential_decay(
                     learning_rate, global_step, decay_steps, decay_rate, staircase=True)
-            tf.summary.scalar('learning_rate', learning_rate)
+            # tf.summary.scalar('learning_rate', learning_rate)
             # Optimizer.
             # if momentum == 0:
             #    optimizer = tf.train.GradientDescentOptimizer(learning_rate)
@@ -298,7 +301,7 @@ class GraphModel(object):
                 if grad is None:
                     print('warning: {} has no gradient'.format(var.op.name))
                 else:
-                    tf.summary.histogram(var.op.name + '/gradients', grad)
+                    # tf.summary.histogram(var.op.name + '/gradients', grad)
                     self.nets[var.op.name] = grad
             # The op return the learning rate.
 
@@ -315,9 +318,9 @@ class GraphModel(object):
     def _get_session(self, sess=None):
         """Restore parameters if no session given."""
         if sess is None:
-            sess = tf.Session(graph=self.graph)
-            filename = tf.train.latest_checkpoint(self._get_path('checkpoints'))
-            self.op_saver.restore(sess, filename)
+            sess = self.sess
+            # filename = tf.train.latest_checkpoint(self._get_path('checkpoints'))
+            # self.op_saver.restore(sess, filename)
         return sess
 
     def _weight_variable(self, shape, regularization=True):
@@ -325,7 +328,7 @@ class GraphModel(object):
         var = tf.get_variable('weights', shape, tf.float32, initializer=initial)
         if regularization:
             self.regularizers.append(tf.nn.l2_loss(var))
-        tf.summary.histogram(var.op.name, var)
+        # tf.summary.histogram(var.op.name, var)
         self.nets[var.name] = var
         return var
 
@@ -334,7 +337,7 @@ class GraphModel(object):
         var = tf.get_variable('bias', shape, tf.float32, initializer=initial)
         if regularization:
             self.regularizers.append(tf.nn.l2_loss(var))
-        tf.summary.histogram(var.op.name, var)
+        # tf.summary.histogram(var.op.name, var)
         self.nets[var.name] = var
         return var
 

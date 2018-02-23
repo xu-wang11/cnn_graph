@@ -22,9 +22,9 @@ class HumanTraffic:
         self.out_matrix = None
         self.dataset_path = data_set_path
 
-    def dataset_split(samples, labels):
+    def dataset_split(self, samples, labels):
         total_row = samples.shape[0]
-        train_row = int((total_row - 168) * 0.7)
+        train_row = int((total_row - 168) * 0.8)
         validate_row = total_row - 168 - train_row
 
         train_data = samples[0:train_row, :]
@@ -32,8 +32,8 @@ class HumanTraffic:
         test_data = samples[train_row + validate_row:, :]
         train_labels = labels[0: train_row, :]
         validate_labels = labels[train_row: train_row + validate_row, :]
-        test_labels = data_labels[-168:, :]
-        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
+        test_labels = labels[-168:, :]
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels
 
     def load_ln_data_period(self, seq_num, seq_num_period=1, seq_num_trend=1, datafile='ln_data.mat'):
         ln_data = loadmat(os.path.join(self.dataset_path, datafile))
@@ -77,7 +77,8 @@ class HumanTraffic:
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        return self.dataset_split(data_samples, data_labels)
+        train_data, validate_data, test_data, train_labels, validate_labels, test_labels = self.dataset_split(data_samples, data_labels)
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
 
     def load_split_ln_data_period(self, seq_num, seq_num_period=1, seq_num_trend=1, datafile='ln_data.mat'):
         ln_data = loadmat(os.path.join(self.dataset_path, datafile))
@@ -91,24 +92,28 @@ class HumanTraffic:
         target_in_matrix = ln_data['inmatrix']
         target_out_matrix = ln_data['outmatrix']
 
-        target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix = self.split_normalize_seasonal_decompose(target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix)
+        target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix = self.normalize_split(target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix)
 
         # train data test data
         data_samples = []
         data_labels = []
-        for i in range((48 * 7 - seq_num) + int(seq_num_trend / 2), target_in_matrix.shape[1] - seq_num):
+        for i in range((48 - seq_num) + int(seq_num_trend / 2), target_in_matrix.shape[1] - seq_num):
             x1 = np.concatenate((split_in_matrix[:, i:i+seq_num], split_out_matrix[:, i:i + seq_num]), axis=1)
             x2 = np.concatenate((split_in_matrix[:, (i + seq_num - 48) - int(seq_num_period / 2): (i + seq_num - 48) + int(seq_num_period / 2) + (seq_num_period % 2)], split_out_matrix[:, (i + seq_num - 48) - int(seq_num_period / 2): (i + seq_num - 48) + int(seq_num_period / 2) + (seq_num_period % 2)]), axis=1)
-            x3 = np.concatenate((split_in_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)], split_out_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)]), axis=1)
+            # x3 = np.concatenate((split_in_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)], split_out_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)]), axis=1)
+            x1 = np.transpose(x1, [0, 2, 1]);
+            x2 = np.transpose(x2, [0, 2, 1]);
+            # x3 = np.transpose(x3, [0, 2, 1]);
             x1 = np.reshape(x1, newshape=(x1.shape[0], x1.shape[1] * x1.shape[2]))
             x2 = np.reshape(x2, newshape=(x2.shape[0], x2.shape[1] * x2.shape[2]))
-            x2 = np.reshape(x3, newshape=(x3.shape[0], x3.shape[1] * x3.shape[2]))
-            data_samples.append(np.concatenate((x1, x2, x3), axis=1))
+            # x3 = np.reshape(x3, newshape=(x3.shape[0], x3.shape[1] * x3.shape[2]))
+            data_samples.append(np.concatenate((x1, x2), axis=1))
             data_labels.append(np.concatenate((target_in_matrix[:, i+seq_num:i+seq_num + 1], target_out_matrix[:, i+seq_num:i+seq_num + 1]), axis=1))
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-       return self.dataset_split(data_samples, data_labels)
+        train_data, validate_data, test_data, train_labels, validate_labels, test_labels = self.dataset_split(data_samples, data_labels)
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
 
     def load_split_ln_data(self, seq_num, datafile='split_lndata_street.mat'):
         # ln_data = loadmat(os.path.join(self.dataset_path, 'split_ln_data_2.mat'))
@@ -126,6 +131,8 @@ class HumanTraffic:
 
 
         target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix = self.normalize_split(target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix)
+        # target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix = self.split_normalize_seasonal_decompose(target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix)
+       
         # target_in_matrix, target_out_matrix = self.normalize(target_in_matrix, target_out_matrix)
         # split_in_matrix = split_in_matrix * 1.0 / self.max_val
         # split_out_matrix = split_out_matrix * 1.0 / self.max_val
@@ -142,12 +149,14 @@ class HumanTraffic:
          # data_labels.append(in_matrix[:, i + seq_num])
 
         data_samples = np.array(data_samples)
+        data_labels = np.array(data_labels)
         print(data_samples.shape)
         # data_samples = np.reshape(data_samples, newshape=(data_samples.shape[0], data_samples.shape[1], data_samples.shape[2] * data_samples.shape[3]))
         # data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        return self.dataset_split(data_samples, data_labels)
+        train_data, validate_data, test_data, train_labels, validate_labels, test_labels = self.dataset_split(data_samples, data_labels)
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
 
     def load_bj_data(self, seq_num):
         ln_data = loadmat(os.path.join(self.dataset_path, 'bj_data.mat'))
@@ -169,7 +178,8 @@ class HumanTraffic:
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        return self.dataset_split(data_samples, data_labels)
+        train_data, validate_data, test_data, train_labels, validate_labels, test_labels = self.dataset_split(data_samples, data_labels)
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels
 
     def load_bj_clus_data(self, seq_num):
         ln_data = loadmat(os.path.join(self.dataset_path, 'bj_clus.mat'))
@@ -196,7 +206,8 @@ class HumanTraffic:
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        return self.dataset_split(data_samples, data_labels)
+        train_data, validate_data, test_data, train_labels, validate_labels, test_labels = self.dataset_split(data_samples, data_labels)
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
 
 
     def load_bj_data_period_trend(self, seq_num, seq_num_period=1, seq_num_trend=1):
@@ -215,14 +226,15 @@ class HumanTraffic:
         for i in range((48 * 7 - seq_num) + int(seq_num_trend / 2), in_matrix.shape[1] - seq_num):
             x1 = np.concatenate((in_matrix[:, i:i+seq_num], out_matrix[:, i:i + seq_num]), axis=1)
             x2 = np.concatenate((in_matrix[:, (i + seq_num - 48) - int(seq_num_period / 2): (i + seq_num - 48) + int(seq_num_period / 2) + (seq_num_period % 2)], out_matrix[:, (i + seq_num - 48) - int(seq_num_period / 2): (i + seq_num - 48) + int(seq_num_period / 2) + (seq_num_period % 2)]), axis=1)
-            x3 = np.concatenate((in_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)], out_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)]), axis=1)
-            data_samples.append(np.concatenate((x1, x2, x3), axis=1))
+            # x3 = np.concatenate((in_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)], out_matrix[:, (i + seq_num - 48 * 7) - int(seq_num_trend / 2): (i + seq_num - 48 * 7) + int(seq_num_trend / 2) + (seq_num_trend % 2)]), axis=1)
+            data_samples.append(np.concatenate((x1, x2), axis=1))
             data_labels.append(np.concatenate((in_matrix[:, i + seq_num:i + seq_num + 1], out_matrix[:, i + seq_num:i + seq_num + 1]), axis=1))
             # data_labels.append(in_matrix[:, i + seq_num])
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        return self.dataset_split(data_samples, data_labels)
+        train_data, validate_data, test_data, train_labels, validate_labels, test_labels = self.dataset_split(data_samples, data_labels)
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
 
     def load_bj_clus_period_trend(self, seq_num):
         ln_data = loadmat(os.path.join(self.dataset_path, 'bj_clus.mat'))
@@ -252,7 +264,8 @@ class HumanTraffic:
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        return self.dataset_split(data_samples, data_labels)
+        train_data, validate_data, test_data, train_labels, validate_labels, test_labels = self.dataset_split(data_samples, data_labels)
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
 
     # only use nodes contains edges
     def load_unisolate_data(self, seq_num):
@@ -302,7 +315,8 @@ class HumanTraffic:
         remove_labels = np.array(remove_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
         # shuffle_array = np.random.permutation(data_samples.shape[0])
-        return self.dataset_split(data_samples, data_labels)
+        train_data, validate_data, test_data, train_labels, validate_labels, test_labels = self.dataset_split(data_samples, data_labels)
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
 
     def load_data(self, seq_num):
         ln_data = loadmat(os.path.join(self.dataset_path, 'ln_data.mat'))
@@ -334,7 +348,8 @@ class HumanTraffic:
         # shuffle_array = pickle.load(open(os.path.join(self.dataset_path, 'shuffle_array.pkl'), 'rb'))
         print(shuffle_array)
         # pickle.dump(shuffle_array, open(os.path.join(self.dataset_path, 'shuffle_array_forzy.pkl'), 'wb'), 2)
-        return self.dataset_split(data_samples, data_labels)
+        train_data, validate_data, test_data, train_labels, validate_labels, test_labels = self.dataset_split(data_samples, data_labels)
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
 
     def load_lstm_data(self, seq_num, neighbor_num, datafile):
         ln_data = loadmat(os.path.join(self.dataset_path, datafile))
@@ -394,7 +409,8 @@ class HumanTraffic:
         data_samples = np.array(data_samples)
         data_labels = np.array(data_labels)
         print('shape of data_samples: {0}'.format(data_samples.shape[0]))
-        return self.dataset_split(data_samples, data_labels)
+        train_data, validate_data, test_data, train_labels, validate_labels, test_labels = self.dataset_split(data_samples, data_labels)
+        return train_data, validate_data, test_data, train_labels, validate_labels, test_labels, edge_matrix
 
     def split_normalize_seasonal_decompose(self, in_matrix, out_matrix, split_in_matrix, split_out_matrix):
         in_matrix = in_matrix.astype(np.float32)
@@ -420,10 +436,10 @@ class HumanTraffic:
             out_matrix[i, :] = out_matrix[i, :] - stl_slow.seasonal - stl_slow.trend - stl_fast.seasonal - stl_fast.trend
         self.max_val = np.amax([np.amax(in_matrix), np.amax(out_matrix), np.amax(split_in_matrix), np.amax(split_out_matrix)])
         self.min_val = np.amin([np.amin(in_matrix), np.amin(out_matrix), np.amin(split_in_matrix), np.amin(split_out_matrix)])
-        in_matrix = in_matrix * 1.0 / (self.max_val - self.min_val)
-        out_matrix = out_matrix * 1.0 / (self.max_val - self.min_val)
-        split_in_matrix = split_in_matrix * 1.0 / (self.max_val - self.min_val)
-        split_out_matrix = split_out_matrix * 1.0 / (self.max_val - self.min_val)
+        in_matrix = (in_matrix -self.min_val) * 1.0 / (self.max_val - self.min_val)
+        out_matrix = (out_matrix - self.min_val) * 1.0 / (self.max_val - self.min_val)
+        split_in_matrix = (split_in_matrix - self.min_val) * 1.0 / (self.max_val - self.min_val)
+        split_out_matrix = (split_out_matrix - self.min_val) * 1.0 / (self.max_val - self.min_val)
         return in_matrix, out_matrix, split_in_matrix, split_out_matrix
 
     def normalize_split(self, in_matrix, out_matrix, split_in_matrix, split_out_matrix):
@@ -453,8 +469,8 @@ class HumanTraffic:
         self.max_val = np.amax([np.amax(in_matrix), np.amax(out_matrix)])
         self.min_val = np.amin([np.amin(in_matrix), np.amin(out_matrix)])
         # self.max_val = 1000
-        in_matrix = in_matrix * 1.0 / (self.max_val - self.min_val) # (in_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
-        out_matrix = out_matrix * 1.0 / (self.max_val - self.min_val) # (out_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
+        in_matrix = (in_matrix - self.min_val) * 1.0 / (self.max_val - self.min_val) # (in_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
+        out_matrix = (out_matrix - self.min_val) * 1.0 / (self.max_val - self.min_val) # (out_matrix * 1.0 - self.max_val / 2) / (self.max_val / 2)
         return in_matrix, out_matrix
 
     def normalize(self, in_matrix, out_matrix):
@@ -473,6 +489,24 @@ class HumanTraffic:
 
 
 if __name__ == "__main__":
-    h = HumanTraffic('../../data/lndata_filter')
-    h.load_unisolate_data(3)
+    h = HumanTraffic('../../data/shenyang_unregular')
+    datafile = 'split_shenyang_unregular.mat'
+    ln_data = loadmat(os.path.join(h.dataset_path, datafile))
+    edge_matrix = loadmat(os.path.join(h.dataset_path, 'edge_matrix.mat'))['edge_matrix']
+    edge_matrix = csr_matrix(edge_matrix)
+    # edge_matrix = edge_matrix.multiply(edge_matrix>=400)
+    # edge_matrix.eliminate_zeros()
+    # edge_matrix.data = np.log10(edge_matrix.data)
+    split_in_matrix = ln_data['split_in_traffic']
+    split_out_matrix = ln_data['split_out_traffic']
+
+    target_in_matrix = ln_data['inmatrix']
+    target_out_matrix = ln_data['outmatrix']
+
+
+    # target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix = self.normalize_split(target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix)
+    target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix = h.split_normalize_seasonal_decompose(target_in_matrix, target_out_matrix, split_in_matrix, split_out_matrix)
+    print(np.sum(target_in_matrix - np.sum(split_in_matrix, axis=2)))
+    print(np.sum(target_out_matrix - np.sum(split_out_matrix, axis=2)))
+    print(h.min_val)
 
